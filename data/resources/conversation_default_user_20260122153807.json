@@ -1,0 +1,15 @@
+{
+  "user_id": "default_user",
+  "messages": [
+    {
+      "timestamp": "2026-01-22 15:37:10",
+      "role": "user",
+      "content": "你好，我是石家庄人"
+    },
+    {
+      "timestamp": "2026-01-22 15:38:00",
+      "role": "user",
+      "content": "我今年24岁"
+    }
+  ]
+}

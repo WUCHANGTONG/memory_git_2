@@ -1,0 +1,20 @@
+# 用户画像提取系统依赖
+
+# 核心依赖
+pydantic>=2.0.0          # 数据验证（当前环境已安装 2.12.5）
+python-dotenv>=1.0.0     # 环境变量加载
+
+# LLM 调用（二选一，推荐使用 langchain）
+# 方案1: 使用 langchain（推荐，更灵活）
+langchain>=0.1.0
+langchain-community>=0.0.38
+
+# 方案2: 直接使用 DashScope SDK（如果不想安装 langchain）
+dashscope>=1.17.0
+
+# 注意：
+# - 当前环境已安装 pydantic 2.12.5，无需重新安装
+# - 如果使用 langchain，会自动处理 DashScope API 调用
+# - 如果只安装 dashscope，代码会自动使用 SDK 直接调用
+# - 两种方式都支持，代码会自动选择可用的方式
+

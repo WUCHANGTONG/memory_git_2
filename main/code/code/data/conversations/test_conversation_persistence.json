@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2026-01-22 09:32:28",
+    "role": "user",
+    "content": "你好"
+  },
+  {
+    "timestamp": "2026-01-22 09:32:28",
+    "role": "assistant",
+    "content": "您好！"
+  },
+  {
+    "timestamp": "2026-01-22 09:32:28",
+    "role": "user",
+    "content": "我是北京人"
+  }
+]

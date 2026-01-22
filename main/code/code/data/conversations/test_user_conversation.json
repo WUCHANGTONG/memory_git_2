@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2026-01-22 09:32:09",
+    "role": "user",
+    "content": "你好，我是石家庄人"
+  },
+  {
+    "timestamp": "2026-01-22 09:32:09",
+    "role": "user",
+    "content": "我今年68岁了"
+  },
+  {
+    "timestamp": "2026-01-22 09:32:09",
+    "role": "assistant",
+    "content": "您好！很高兴认识您"
+  }
+]

@@ -1,0 +1,104 @@
+{
+  "user_id": "test_user_agent",
+  "last_updated": "2026-01-22 15:30:57",
+  "profile": {
+    "demographics": {
+      "age": {
+        "value": 68,
+        "confidence": 0.9
+      },
+      "gender": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "city_level": {
+        "value": "石家庄",
+        "confidence": 0.9
+      },
+      "education": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "marital_status": {
+        "value": null,
+        "confidence": 0.0
+      }
+    },
+    "health": {
+      "chronic_conditions": {
+        "value": [
+          "高血压"
+        ],
+        "confidence": 0.9
+      },
+      "mobility": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "sleep_quality": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "medication_adherence": {
+        "value": "每天服药",
+        "confidence": 0.9
+      }
+    },
+    "cognitive": {
+      "memory_status": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "digital_literacy": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "expression_fluency": {
+        "value": null,
+        "confidence": 0.0
+      }
+    },
+    "emotional": {
+      "baseline_mood": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "loneliness_level": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "anxiety_level": {
+        "value": null,
+        "confidence": 0.0
+      }
+    },
+    "lifestyle": {
+      "living_arrangement": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "daily_routine": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "hobbies": {
+        "value": [],
+        "confidence": 0.0
+      }
+    },
+    "preferences": {
+      "communication_style": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "service_channel_preference": {
+        "value": null,
+        "confidence": 0.0
+      },
+      "privacy_sensitivity": {
+        "value": null,
+        "confidence": 0.0
+      }
+    }
+  }
+}
