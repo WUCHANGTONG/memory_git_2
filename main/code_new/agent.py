@@ -11,116 +11,150 @@ from typing import Dict, Any, Optional
 from memory_store import MemUStore
 from chat_memory import ChatMemoryManager
 from profile_extractor import update_profile
-from profile_schema import init_profile
+from profile_schema_optimized import init_optimized_profile
 
 
 def show_profile_summary(profile: Dict[str, Any]):
     """
-    显示用户画像摘要（只显示有值的字段）
+    显示用户画像摘要（只显示有值的字段）- 优化版结构
     
     Args:
-        profile: 用户画像字典
+        profile: 用户画像字典（优化版结构）
     """
     print("\n" + "="*50)
-    print("用户画像摘要")
+    print("用户画像摘要（优化版）")
     print("="*50)
     
-    # 人口统计信息
-    demo = profile.get("demographics", {})
-    demo_info = []
-    if demo.get("age", {}).get("value"):
-        demo_info.append(f"年龄: {demo['age']['value']}岁")
-    if demo.get("gender", {}).get("value"):
-        demo_info.append(f"性别: {demo['gender']['value']}")
-    if demo.get("city_level", {}).get("value"):
-        demo_info.append(f"城市: {demo['city_level']['value']}")
-    if demo.get("education", {}).get("value"):
-        demo_info.append(f"教育: {demo['education']['value']}")
-    if demo.get("marital_status", {}).get("value"):
-        demo_info.append(f"婚姻: {demo['marital_status']['value']}")
+    # 身份与语言
+    identity = profile.get("identity_language", {})
+    identity_info = []
+    if identity.get("age", {}).get("value"):
+        identity_info.append(f"年龄: {identity['age']['value']}岁")
+    if identity.get("gender", {}).get("value"):
+        identity_info.append(f"性别: {identity['gender']['value']}")
+    if identity.get("region", {}).get("value"):
+        identity_info.append(f"地区: {identity['region']['value']}")
+    if identity.get("education_level", {}).get("value"):
+        identity_info.append(f"教育: {identity['education_level']['value']}")
+    if identity.get("explanation_depth_preference", {}).get("value"):
+        identity_info.append(f"解释深度: {identity['explanation_depth_preference']['value']}")
     
-    if demo_info:
-        print("\n【人口统计】")
-        print("  " + " | ".join(demo_info))
+    if identity_info:
+        print("\n【身份与语言】")
+        print("  " + " | ".join(identity_info))
     
-    # 健康状况
-    health = profile.get("health", {})
+    # 健康与安全
+    health = profile.get("health_safety", {})
     health_info = []
     if health.get("chronic_conditions", {}).get("value"):
         conditions = health['chronic_conditions']['value']
         if isinstance(conditions, list) and conditions:
             health_info.append(f"慢性病: {', '.join(conditions)}")
-    if health.get("mobility", {}).get("value"):
-        health_info.append(f"行动能力: {health['mobility']['value']}")
-    if health.get("sleep_quality", {}).get("value"):
-        health_info.append(f"睡眠质量: {health['sleep_quality']['value']}")
-    if health.get("medication_adherence", {}).get("value"):
-        health_info.append(f"用药情况: {health['medication_adherence']['value']}")
+    if health.get("mobility_level", {}).get("value"):
+        health_info.append(f"行动能力: {health['mobility_level']['value']}")
+    if health.get("daily_energy_level", {}).get("value"):
+        health_info.append(f"精力水平: {health['daily_energy_level']['value']}")
+    if health.get("risk_sensitivity_level", {}).get("value"):
+        health_info.append(f"风险敏感度: {health['risk_sensitivity_level']['value']}")
     
     if health_info:
-        print("\n【健康状况】")
+        print("\n【健康与安全】")
         print("  " + " | ".join(health_info))
     
-    # 认知能力
-    cognitive = profile.get("cognitive", {})
+    # 认知与交互
+    cognitive = profile.get("cognitive_interaction", {})
     cognitive_info = []
-    if cognitive.get("memory_status", {}).get("value"):
-        cognitive_info.append(f"记忆状况: {cognitive['memory_status']['value']}")
+    if cognitive.get("attention_span", {}).get("value"):
+        cognitive_info.append(f"注意力: {cognitive['attention_span']['value']}")
+    if cognitive.get("processing_speed", {}).get("value"):
+        cognitive_info.append(f"处理速度: {cognitive['processing_speed']['value']}")
     if cognitive.get("digital_literacy", {}).get("value"):
-        cognitive_info.append(f"数字能力: {cognitive['digital_literacy']['value']}")
-    if cognitive.get("expression_fluency", {}).get("value"):
-        cognitive_info.append(f"表达流畅度: {cognitive['expression_fluency']['value']}")
+        cognitive_info.append(f"数字技能: {cognitive['digital_literacy']['value']}")
+    if cognitive.get("instruction_following_ability", {}).get("value"):
+        cognitive_info.append(f"指令理解: {cognitive['instruction_following_ability']['value']}")
     
     if cognitive_info:
-        print("\n【认知能力】")
+        print("\n【认知与交互】")
         print("  " + " | ".join(cognitive_info))
     
-    # 情感状态
-    emotional = profile.get("emotional", {})
+    # 情感与支持
+    emotional = profile.get("emotional_support", {})
     emotional_info = []
     if emotional.get("baseline_mood", {}).get("value"):
         emotional_info.append(f"基础情绪: {emotional['baseline_mood']['value']}")
     if emotional.get("loneliness_level", {}).get("value"):
         emotional_info.append(f"孤独感: {emotional['loneliness_level']['value']}")
-    if emotional.get("anxiety_level", {}).get("value"):
-        emotional_info.append(f"焦虑程度: {emotional['anxiety_level']['value']}")
+    if emotional.get("emotional_support_need", {}).get("value"):
+        emotional_info.append(f"情感支持需求: {emotional['emotional_support_need']['value']}")
+    if emotional.get("preferred_conversation_mode", {}).get("value"):
+        emotional_info.append(f"对话模式: {emotional['preferred_conversation_mode']['value']}")
     
     if emotional_info:
-        print("\n【情感状态】")
+        print("\n【情感与支持】")
         print("  " + " | ".join(emotional_info))
     
-    # 生活方式
-    lifestyle = profile.get("lifestyle", {})
+    # 生活方式与社交
+    lifestyle = profile.get("lifestyle_social", {})
     lifestyle_info = []
-    if lifestyle.get("living_arrangement", {}).get("value"):
-        lifestyle_info.append(f"居住安排: {lifestyle['living_arrangement']['value']}")
-    if lifestyle.get("daily_routine", {}).get("value"):
-        lifestyle_info.append(f"日常作息: {lifestyle['daily_routine']['value']}")
-    if lifestyle.get("hobbies", {}).get("value"):
-        hobbies = lifestyle['hobbies']['value']
-        if isinstance(hobbies, list) and hobbies:
-            lifestyle_info.append(f"兴趣爱好: {', '.join(hobbies)}")
+    if lifestyle.get("living_situation", {}).get("value"):
+        lifestyle_info.append(f"居住状况: {lifestyle['living_situation']['value']}")
+    if lifestyle.get("social_support_level", {}).get("value"):
+        lifestyle_info.append(f"社交支持: {lifestyle['social_support_level']['value']}")
+    if lifestyle.get("independence_level", {}).get("value"):
+        lifestyle_info.append(f"独立性: {lifestyle['independence_level']['value']}")
+    if lifestyle.get("core_interests", {}).get("value"):
+        interests = lifestyle['core_interests']['value']
+        if isinstance(interests, list) and interests:
+            lifestyle_info.append(f"核心兴趣: {', '.join(interests)}")
     
     if lifestyle_info:
-        print("\n【生活方式】")
+        print("\n【生活方式与社交】")
         print("  " + " | ".join(lifestyle_info))
     
-    # 偏好设置
-    preferences = profile.get("preferences", {})
-    preferences_info = []
-    if preferences.get("communication_style", {}).get("value"):
-        preferences_info.append(f"沟通风格: {preferences['communication_style']['value']}")
-    if preferences.get("service_channel_preference", {}).get("value"):
-        preferences_info.append(f"服务渠道: {preferences['service_channel_preference']['value']}")
-    if preferences.get("privacy_sensitivity", {}).get("value"):
-        preferences_info.append(f"隐私敏感度: {preferences['privacy_sensitivity']['value']}")
+    # 价值观与偏好
+    values = profile.get("values_preferences", {})
+    values_info = []
+    if values.get("topic_preferences", {}).get("value"):
+        topics = values['topic_preferences']['value']
+        if isinstance(topics, list) and topics:
+            values_info.append(f"话题偏好: {', '.join(topics)}")
+    if values.get("taboo_topics", {}).get("value"):
+        taboos = values['taboo_topics']['value']
+        if isinstance(taboos, list) and taboos:
+            values_info.append(f"敏感话题: {', '.join(taboos)}")
+    if values.get("value_orientation", {}).get("value"):
+        values_info.append(f"价值观: {values['value_orientation']['value']}")
+    if values.get("motivational_factors", {}).get("value"):
+        factors = values['motivational_factors']['value']
+        if isinstance(factors, list) and factors:
+            values_info.append(f"激励因素: {', '.join(factors)}")
     
-    if preferences_info:
-        print("\n【偏好设置】")
-        print("  " + " | ".join(preferences_info))
+    if values_info:
+        print("\n【价值观与偏好】")
+        print("  " + " | ".join(values_info))
+    
+    # 生成风格控制器
+    style = profile.get("response_style", {})
+    style_info = []
+    if style.get("formality_level", {}).get("value"):
+        style_info.append(f"正式程度: {style['formality_level']['value']}")
+    if style.get("verbosity_level", {}).get("value"):
+        style_info.append(f"详细程度: {style['verbosity_level']['value']}")
+    if style.get("emotional_tone", {}).get("value"):
+        style_info.append(f"情感语调: {style['emotional_tone']['value']}")
+    if style.get("directive_strength", {}).get("value"):
+        style_info.append(f"指导强度: {style['directive_strength']['value']}")
+    if style.get("information_density", {}).get("value"):
+        style_info.append(f"信息密度: {style['information_density']['value']}")
+    if style.get("risk_cautiousness", {}).get("value"):
+        style_info.append(f"风险谨慎度: {style['risk_cautiousness']['value']}")
+    
+    if style_info:
+        print("\n【生成风格控制】")
+        print("  " + " | ".join(style_info))
     
     # 如果没有信息
-    if not any([demo_info, health_info, cognitive_info, emotional_info, lifestyle_info, preferences_info]):
+    if not any([identity_info, health_info, cognitive_info, emotional_info, lifestyle_info, values_info, style_info]):
         print("\n[提示] 当前画像为空，请开始对话以提取用户信息")
     
     print("="*50 + "\n")
@@ -277,10 +311,10 @@ async def main():
         print("\n[INFO] 正在加载历史画像...")
         profile = await memu_store.load_profile(user_id)
         if not profile:
-            profile = init_profile()
-            print("[INFO] 新用户，已初始化空画像")
+            profile = init_optimized_profile()
+            print("[INFO] 新用户，已初始化空画像（优化版）")
         else:
-            print("[OK] 已从 memU 加载历史画像")
+            print("[OK] 已从 memU 加载历史画像（优化版）")
         
         # 4. 初始化 Memory
         print("\n[INFO] 正在初始化 Memory...")

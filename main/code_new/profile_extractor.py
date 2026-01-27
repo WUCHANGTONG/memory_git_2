@@ -123,77 +123,160 @@ def init_llm():
     return None
 
 
-# 画像提取提示词模板
+# 画像提取提示词模板 - 优化版（生成控制型）
 PROFILE_PROMPT_TEMPLATE = """
-你是一个专业的用户画像抽取器，专门用于分析老年人对话内容，从对话中提取用户信息。
+你是一个**老年用户画像控制参数抽取引擎**，专门从多轮自然语言对话中，持续、准确地提取能直接控制回答生成的关键参数。
 
-## 任务说明
-从给定的对话内容中提取用户信息，更新用户画像。**必须仔细分析对话，提取所有能推断出的信息**。
+你的目标不是"猜测用户"，而是**基于对话证据，提取能直接控制LLM生成的控制参数**。
 
-## 字段提取指南
-请根据对话内容，识别并提取以下信息：
+==================================================
+【任务目标】
+==================================================
+给定：
+1. 最新一段或多段老年人对话内容
+2. 当前已存在的用户画像 JSON（优化版结构）
 
-**人口统计信息 (demographics)**:
-- age: 年龄（如"我68岁"、"今年70了"）
-- gender: 性别（如"我是男的"、"老太太"）
-- city_level: 城市/地区（如"我是石家庄人"、"住在北京"、"上海人"）
-- education: 教育程度（如"小学毕业"、"上过大学"）
-- marital_status: 婚姻状况（如"老伴"、"单身"、"离婚"）
+你需要：
+- 从对话中**提取所有可以合理确定或推断的控制参数**
+- 只更新有新证据支持的字段
+- 保留原有信息，避免无依据覆盖
+- 输出**更新后的完整用户画像 JSON**
 
-**健康状况 (health)**:
-- chronic_conditions: 慢性疾病列表（如"高血压"、"糖尿病"）
-- mobility: 行动能力（如"走不动"、"腿脚不好"）
-- sleep_quality: 睡眠质量（如"睡不好"、"失眠"）
-- medication_adherence: 用药情况（如"每天吃药"、"忘记吃药"）
+==================================================
+【核心原则】
+==================================================
+1. **证据优先原则**：
+   - 所有字段更新必须基于对话中出现的事实、表述、行为迹象或语言风格证据。
+   - 不允许凭常识、刻板印象或模型偏好填充字段。
 
-**认知能力 (cognitive)**:
-- memory_status: 记忆状况（如"记性不好"、"健忘"）
-- digital_literacy: 数字设备使用能力（如"不会用手机"、"会用微信"）
-- expression_fluency: 表达流畅度（从对话中判断）
+2. **控制参数优先**：
+   - 每个字段都必须是"控制旋钮"，能直接影响LLM生成。
+   - 优先提取能立即应用的控制参数。
 
-**情感状态 (emotional)**:
-- baseline_mood: 基础情绪（如"心情好"、"不开心"）
-- loneliness_level: 孤独感（如"一个人"、"没人陪"）
-- anxiety_level: 焦虑程度（如"担心"、"焦虑"）
+3. **显式优于隐式**：
+   - 明确表达（如"我今年70岁"） > 间接暗示（如"我退休十多年了"）。
 
-**生活方式 (lifestyle)**:
-- living_arrangement: 居住安排（如"和儿子住"、"独居"）
-- daily_routine: 日常作息（如"早起"、"晚上散步"）
-- hobbies: 兴趣爱好列表（如"下棋"、"打麻将"、"跳广场舞"）
+4. **不确定则不填**：
+   - 无法合理推断的信息，必须保持 null，confidence=0.0。
 
-**偏好设置 (preferences)**:
-- communication_style: 沟通风格（从对话中判断）
-- service_channel_preference: 服务渠道偏好
-- privacy_sensitivity: 隐私敏感度
+5. **时间敏感性**：
+   - 如果对话中出现时间变化（如"最近""以前""现在"），优先更新为**当前状态**。
 
-## 重要规则
-1. **必须从对话中提取信息**：仔细分析对话，提取所有能推断出的信息
-2. **置信度设置**：
-   - 明确提到的信息（如"我是石家庄人"）confidence设为0.8-1.0
-   - 间接推断的信息（如从语气判断）confidence设为0.5-0.7
-   - 无法推断的信息保持null，confidence为0.0
-3. **只更新有信息的字段**：如果对话中没有相关信息，保持原有值不变
-4. **不要删除字段**：保持JSON结构完整
-5. **输出格式**：只输出JSON，不要有任何解释性文字、markdown标记
+6. **冲突处理**：
+   - 若新信息与旧画像冲突，仅在新证据更明确、更近期、更可信时才更新，并降低 confidence。
 
-## 提取示例
-示例1 - 对话："你好，我是石家庄人，今年68岁了"
-应提取：
-- demographics.city_level: value="石家庄", confidence=0.9
-- demographics.age: value=68, confidence=0.9
+==================================================
+【字段结构说明 - 优化版（生成控制型）】
+==================================================
+你需要维护以下字段结构（JSON 必须完整，不得删除字段）：
 
-示例2 - 对话："我有点高血压，每天都要吃药"
-应提取：
-- health.chronic_conditions: value=["高血压"], confidence=0.9
-- health.medication_adherence: value="每天服药", confidence=0.9
+identity_language (身份与语言控制):
+- age: 年龄（整数）→ 影响称呼方式
+- gender: 性别 → 影响语言选择
+- region: 地区（可包含省、市、乡镇）→ 本地化内容
+- education_level: 教育程度 → 解释复杂度
+- explanation_depth_preference: 解释深度偏好（simple/moderate/detailed）→ 详细程度控制
 
-## 当前对话内容：
+health_safety (健康与风险控制):
+- chronic_conditions: 慢性疾病列表 → 是否需要健康提醒
+- mobility_level: 行动能力（良好/一般/受限）→ 建议活动类型
+- daily_energy_level: 日常精力水平（高/中/低）→ 任务复杂度控制
+- risk_sensitivity_level: 风险敏感度（低/中/高）→ 建议谨慎程度
+
+cognitive_interaction (认知与交互控制):
+- attention_span: 注意力持续时间（short/normal/long）→ 段落长度控制
+- processing_speed: 信息处理速度（slow/normal/fast）→ 呈现节奏控制
+- digital_literacy: 数字技能水平（基础/中等/熟练）→ 技术术语使用
+- instruction_following_ability: 指令理解能力（弱/中/强）→ 步骤拆分程度
+
+emotional_support (情感与陪伴控制):
+- baseline_mood: 基础情绪状态（乐观/中性/悲观）→ 语气选择
+- loneliness_level: 孤独感程度（低/中/高）→ 陪伴强度控制
+- emotional_support_need: 情感支持需求强度（低/中/高）→ 是否先安慰
+- preferred_conversation_mode: 偏好对话模式（陪伴型/工具型/混合）→ 对话风格
+
+lifestyle_social (生活方式与社交控制):
+- living_situation: 居住状况（独居/与配偶/与子女/其他）→ 推荐内容类型
+- social_support_level: 社交支持水平（高/中/低）→ 是否建议联系他人
+- independence_level: 独立性水平（高/中/低）→ 建议自主程度
+- core_interests: 核心兴趣列表 → 举例和推荐内容
+
+values_preferences (价值观与话题控制):
+- topic_preferences: 话题偏好列表 → 话题选择倾向
+- taboo_topics: 敏感话题列表 → 避免踩雷
+- value_orientation: 价值观导向（传统/现代/混合）→ 建议方向对齐
+- motivational_factors: 激励因素列表 → 增强情感共鸣
+
+response_style (生成风格控制器) ⭐核心:
+- formality_level: 正式程度（casual/formal/warm）→ 语言风格
+- verbosity_level: 详细程度（brief/moderate/detailed）→ 回答长度
+- emotional_tone: 情感语调（neutral/caring/encouraging）→ 语气选择
+- directive_strength: 指导强度（suggestive/moderate/directive）→ 建议方式
+- information_density: 信息密度（low/medium/high）→ 信息量控制
+- risk_cautiousness: 风险谨慎度（relaxed/cautious/very_cautious）→ 安全提示强度
+
+interaction_history (交互历史 - 学习层，不直接给LLM):
+- successful_interaction_patterns: 成功交互模式列表
+- failed_interaction_patterns: 失败交互模式列表
+- preference_evolution_trend: 偏好变化趋势
+- response_satisfaction_score: 回答满意度（0.0-1.0）
+- last_interaction_feedback: 最近交互反馈
+
+==================================================
+【置信度评分规范】
+==================================================
+每个字段必须包含：
+- value: 字段值
+- confidence: 0.0 – 1.0
+
+评分标准：
+- 0.9 – 1.0：用户明确、直接表达（如"我今年68岁""我有高血压"）
+- 0.7 – 0.8：多次提及、语义非常清晰
+- 0.5 – 0.6：基于语气、行为、表达方式的合理推断
+- 0.1 – 0.4：弱推断（慎用，除非对系统有价值）
+- 0.0：无信息或无法推断
+
+==================================================
+【语言与表达容错规则】
+==================================================
+老年对话可能存在：
+- 方言用语、口语、省略、代词模糊
+- 时间混乱、叙述跳跃、情绪化表达
+
+你必须：
+- 进行语义还原（如"老伴""娃""身子不行了"）
+- 结合上下文消歧
+- 避免字面误读
+
+==================================================
+【字段更新规则】
+==================================================
+1. 只更新对话中出现新信息或比原画像更明确的信息。
+2. 不得删除原有字段，只能覆盖 value 和 confidence。
+3. 若新信息只是补充细节，应合并而非替换（如 core_interests 增加新项）。
+4. 若信息模糊（如"年纪不小了"），可保留为区间或模糊描述并降低 confidence。
+5. **response_style 字段可以从其他维度自动推导**：
+   - 如果用户年龄>=70，可设置 formality_level="warm"
+   - 如果 attention_span="short"，可设置 verbosity_level="brief"
+   - 如果 loneliness_level="high"，可设置 emotional_tone="caring"
+   - 如果 chronic_conditions 有值，可设置 risk_cautiousness="cautious"
+
+==================================================
+【输出格式要求】
+==================================================
+- 只输出 JSON
+- 不包含任何解释、注释、Markdown、自然语言说明
+- JSON 结构必须完整、字段齐全、格式合法
+
+==================================================
+【当前对话内容】：
 {conversation}
 
-当前用户画像：
+【当前用户画像 JSON】：
 {profile_json}
 
-请仔细分析对话，提取所有能推断出的信息，输出更新后的完整用户画像JSON（只输出JSON，不要其他内容）：
+==================================================
+请基于以上规则，分析对话，输出更新后的完整用户画像 JSON（仅输出 JSON，不要其他内容）：
 """
 
 
