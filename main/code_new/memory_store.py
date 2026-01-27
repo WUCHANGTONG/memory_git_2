@@ -106,7 +106,13 @@ class MemUStore:
                 }
             },
             database_config={
-                "metadata_store": {"provider": "inmemory"},
+                "metadata_store": {
+                    "provider": "postgres",
+                    "dsn": os.getenv(
+                        "MEMU_DATABASE_URL",
+                        "postgresql://memu:memu123@localhost:5433/memu_db"
+                    )
+                },
             },
             retrieve_config={"method": "rag"},
         )

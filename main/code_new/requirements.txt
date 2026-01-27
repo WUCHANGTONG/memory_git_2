@@ -12,9 +12,14 @@ langchain-community>=0.0.38
 # 方案2: 直接使用 DashScope SDK（如果不想安装 langchain）
 dashscope>=1.17.0
 
+# PostgreSQL + pgvector 支持（用于向量存储）
+pgvector>=0.3.4
+psycopg2-binary>=2.9.0
+
 # 注意：
 # - 当前环境已安装 pydantic 2.12.5，无需重新安装
 # - 如果使用 langchain，会自动处理 DashScope API 调用
 # - 如果只安装 dashscope，代码会自动使用 SDK 直接调用
 # - 两种方式都支持，代码会自动选择可用的方式
+# - PostgreSQL 依赖：需要先启动 PostgreSQL 服务（见 docker-compose.yml）
 
