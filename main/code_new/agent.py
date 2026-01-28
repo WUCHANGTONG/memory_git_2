@@ -7,11 +7,36 @@
 
 import asyncio
 import json
+import os
 from typing import Dict, Any, Optional
+from pathlib import Path
+from dotenv import load_dotenv
 from memory_store import MemUStore
 from chat_memory import ChatMemoryManager
 from profile_extractor import update_profile
 from profile_schema_optimized import init_optimized_profile
+
+# 尝试导入个性化回答模块
+try:
+    from personalized_response import PersonalizedResponder
+    PERSONALIZED_RESPONSE_AVAILABLE = True
+except ImportError:
+    PERSONALIZED_RESPONSE_AVAILABLE = False
+    PersonalizedResponder = None
+    print("[WARN] personalized_response 模块未找到，个性化回答功能不可用")
+
+# 加载环境变量
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()
+
+# 从环境变量读取配置：是否开启个性化回答（默认开启）
+ENABLE_PERSONALIZED_RESPONSE = os.getenv(
+    "ENABLE_PERSONALIZED_RESPONSE", 
+    "true"
+).lower() in ("true", "1", "yes", "on")
 
 
 def show_profile_summary(profile: Dict[str, Any]):
@@ -132,7 +157,9 @@ def show_profile_updates(profile: Dict[str, Any], user_input: str):
 
 async def chat_loop(user_id: str, profile: Dict[str, Any], 
                    memory_manager: ChatMemoryManager, 
-                   memu_store: MemUStore):
+                   memu_store: MemUStore,
+                   responder: Optional[Any] = None,
+                   enable_personalized_response: bool = True):
     """
     对话循环主函数
     
@@ -141,12 +168,16 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
         profile: 用户画像字典
         memory_manager: Memory管理器
         memu_store: memU存储层
+        responder: 个性化回答生成器（可选）
+        enable_personalized_response: 是否开启个性化回答
     """
     print("\n" + "="*60)
     print("对话系统已启动")
     print("="*60)
     print("\n说明：")
     print("  - 输入对话内容，系统会提取并更新用户画像")
+    if enable_personalized_response and responder:
+        print("  - 系统会根据用户画像生成个性化回答")
     print("  - 输入 'show' 查看当前画像摘要")
     print("  - 输入 'profile' 查看完整画像（JSON格式）")
     print("  - 输入 'exit' 结束对话并保存数据")
@@ -193,7 +224,11 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
                 print("  profile  - 查看完整用户画像（JSON格式）")
                 print("  exit     - 结束对话并保存数据")
                 print("  help     - 显示帮助信息")
-                print("\n直接输入对话内容即可提取画像信息\n")
+                print("\n直接输入对话内容即可提取画像信息")
+                if enable_personalized_response and responder:
+                    print("系统会根据用户画像自动生成个性化回答\n")
+                else:
+                    print("（个性化回答功能已关闭）\n")
                 continue
             
             # 添加用户消息到 Memory 和 memU
@@ -224,7 +259,31 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
             
             # 显示更新摘要
             show_profile_updates(profile, user_input)
-            print()  # 空行
+            
+            # 生成个性化回答（如果启用）
+            if enable_personalized_response and responder:
+                try:
+                    print("\n[INFO] 正在生成个性化回答...")
+                    assistant_response = await responder.generate_response(
+                        user_id, 
+                        user_input, 
+                        profile
+                    )
+                    
+                    # 保存助手回复到对话历史
+                    await memory_manager.add_message(
+                        user_id, 
+                        "assistant", 
+                        assistant_response
+                    )
+                    
+                    # 显示回答
+                    print(f"\n助手: {assistant_response}\n")
+                except Exception as e:
+                    print(f"[WARN] 个性化回答生成失败: {e}")
+                    print("[INFO] 继续对话，但不生成回答\n")
+            else:
+                print()  # 空行
             
         except KeyboardInterrupt:
             print("\n\n[INFO] 检测到中断信号，正在保存数据...")
@@ -285,8 +344,31 @@ async def main():
         if messages:
             print(f"[INFO] 已加载 {len(messages)} 条历史对话")
         
-        # 5. 开始对话循环
-        await chat_loop(user_id, profile, memory_manager, memu_store)
+        # 5. 初始化个性化回答生成器（如果启用）
+        responder = None
+        if ENABLE_PERSONALIZED_RESPONSE and PERSONALIZED_RESPONSE_AVAILABLE:
+            print("\n[INFO] 正在初始化个性化回答生成器...")
+            try:
+                responder = PersonalizedResponder(memu_store, memory_manager)
+                print("[OK] 个性化回答生成器初始化成功")
+            except Exception as e:
+                print(f"[WARN] 个性化回答生成器初始化失败: {e}")
+                print("[INFO] 将关闭个性化回答功能")
+                responder = None
+        elif not PERSONALIZED_RESPONSE_AVAILABLE:
+            print("\n[WARN] 个性化回答模块不可用，功能已关闭")
+        elif not ENABLE_PERSONALIZED_RESPONSE:
+            print("\n[INFO] 个性化回答功能已通过配置关闭")
+        
+        # 6. 开始对话循环
+        await chat_loop(
+            user_id, 
+            profile, 
+            memory_manager, 
+            memu_store,
+            responder=responder,
+            enable_personalized_response=ENABLE_PERSONALIZED_RESPONSE and responder is not None
+        )
         
     except KeyboardInterrupt:
         print("\n\n[INFO] 程序被中断")
