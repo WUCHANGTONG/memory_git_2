@@ -38,6 +38,19 @@ ENABLE_PERSONALIZED_RESPONSE = os.getenv(
     "true"
 ).lower() in ("true", "1", "yes", "on")
 
+# 从环境变量读取配置：交互模式（real_user / simulated_user）
+INTERACTION_MODE = os.getenv("INTERACTION_MODE", "real_user").lower()
+
+# 尝试导入用户模拟器模块（包方式导入）
+try:
+    from elderly_user_simulator.elderly_user_simulator import SimpleElderlyUserSimulator
+    USER_SIMULATOR_AVAILABLE = True
+except ImportError:
+    USER_SIMULATOR_AVAILABLE = False
+    SimpleElderlyUserSimulator = None
+    if INTERACTION_MODE == "simulated_user":
+        print("[WARN] elderly_user_simulator 模块未找到，模拟用户模式不可用")
+
 
 def show_profile_summary(profile: Dict[str, Any]):
     """
@@ -159,7 +172,9 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
                    memory_manager: ChatMemoryManager, 
                    memu_store: MemUStore,
                    responder: Optional[Any] = None,
-                   enable_personalized_response: bool = True):
+                   enable_personalized_response: bool = True,
+                   interaction_mode: str = "real_user",
+                   user_simulator: Optional[Any] = None):
     """
     对话循环主函数
     
@@ -174,6 +189,102 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
     print("\n" + "="*60)
     print("对话系统已启动")
     print("="*60)
+    
+    # 根据模式显示不同的说明
+    if interaction_mode == "simulated_user":
+        print("\n模式：模拟用户模式")
+        print("  - 模拟老年人用户将自动生成对话")
+        print("  - 系统会提取并更新用户画像")
+        if enable_personalized_response and responder:
+            print("  - 系统会根据用户画像生成个性化回答")
+        print("  - 每轮对话后会询问是否继续")
+        print("\n" + "-"*60 + "\n")
+        
+        # 等待用户输入开始
+        input("按回车键开始对话...")
+        print("\n开始对话...\n")
+        
+        # 模拟用户模式对话循环
+        conversation_history = []
+        turn = 0
+        
+        while True:
+            try:
+                turn += 1
+                print(f"\n--- 第 {turn} 轮对话 ---\n")
+                
+                # 1. 生成用户消息
+                print("[INFO] 正在生成用户消息...")
+                user_message = user_simulator.generate_user_message(conversation_history)
+                print(f"用户: {user_message}\n")
+                
+                # 2. 保存用户消息
+                await memory_manager.add_message(user_id, "user", user_message)
+                conversation_history.append({"role": "user", "content": user_message})
+                
+                # 3. 提取画像
+                print("[INFO] 正在提取画像信息...")
+                try:
+                    profile = update_profile(user_message, profile)
+                    print("[OK] 画像提取完成")
+                except Exception as e:
+                    print(f"[WARN] 画像提取失败: {e}")
+                
+                # 4. 保存画像
+                await memu_store.save_profile(user_id, profile)
+                
+                # 5. 生成助手回复
+                if enable_personalized_response and responder:
+                    print("\n[INFO] 正在生成个性化回答...")
+                    try:
+                        assistant_response = await responder.generate_response(
+                            user_id,
+                            user_message,
+                            profile
+                        )
+                        await memory_manager.add_message(user_id, "assistant", assistant_response)
+                        conversation_history.append({"role": "assistant", "content": assistant_response})
+                        print(f"助手: {assistant_response}\n")
+                    except Exception as e:
+                        print(f"[WARN] 个性化回答生成失败: {e}")
+                        assistant_response = "[助手回复生成失败]"
+                        conversation_history.append({"role": "assistant", "content": assistant_response})
+                else:
+                    assistant_response = "[个性化回答功能已关闭]"
+                    conversation_history.append({"role": "assistant", "content": assistant_response})
+                
+                # 6. 询问是否继续
+                print("-" * 60)
+                continue_choice = input("\n是否继续对话？(y/n，或输入 'exit' 退出): ").strip().lower()
+                
+                if continue_choice in ("n", "no", "exit", "quit"):
+                    print("\n[INFO] 正在保存数据...")
+                    await memu_store.save_profile(user_id, profile)
+                    await memory_manager.save_current_memory(user_id)
+                    print("[OK] 数据已保存")
+                    print("\n对话已结束，再见！")
+                    break
+                elif continue_choice not in ("y", "yes", ""):
+                    print("[INFO] 输入无效，默认继续对话")
+                
+            except KeyboardInterrupt:
+                print("\n\n[INFO] 检测到中断信号，正在保存数据...")
+                await memu_store.save_profile(user_id, profile)
+                await memory_manager.save_current_memory(user_id)
+                print("[OK] 数据已保存")
+                print("\n对话已中断，再见！")
+                break
+            except Exception as e:
+                print(f"\n[ERROR] 发生错误: {e}")
+                import traceback
+                traceback.print_exc()
+                continue_choice = input("\n是否继续对话？(y/n): ").strip().lower()
+                if continue_choice in ("n", "no", "exit", "quit"):
+                    break
+        
+        return
+    
+    # 真实用户模式（原有逻辑）
     print("\n说明：")
     print("  - 输入对话内容，系统会提取并更新用户画像")
     if enable_personalized_response and responder:
@@ -360,14 +471,36 @@ async def main():
         elif not ENABLE_PERSONALIZED_RESPONSE:
             print("\n[INFO] 个性化回答功能已通过配置关闭")
         
-        # 6. 开始对话循环
+        # 6. 初始化用户模拟器（如果使用模拟用户模式）
+        user_simulator = None
+        interaction_mode = INTERACTION_MODE  # 初始化交互模式
+        if INTERACTION_MODE == "simulated_user":
+            if not USER_SIMULATOR_AVAILABLE:
+                print("\n[ERROR] 模拟用户模式需要 elderly_user_simulator 模块")
+                print("[INFO] 切换到真实用户模式")
+                interaction_mode = "real_user"
+            else:
+                print("\n[INFO] 正在初始化用户模拟器...")
+                try:
+                    config_path = os.getenv("ELDERLY_USER_CONFIG", None)
+                    user_simulator = SimpleElderlyUserSimulator(config_path)
+                    print("[OK] 用户模拟器初始化成功")
+                except Exception as e:
+                    print(f"[WARN] 用户模拟器初始化失败: {e}")
+                    print("[INFO] 切换到真实用户模式")
+                    interaction_mode = "real_user"
+                    user_simulator = None
+        
+        # 7. 开始对话循环
         await chat_loop(
             user_id, 
             profile, 
             memory_manager, 
             memu_store,
             responder=responder,
-            enable_personalized_response=ENABLE_PERSONALIZED_RESPONSE and responder is not None
+            enable_personalized_response=ENABLE_PERSONALIZED_RESPONSE and responder is not None,
+            interaction_mode=interaction_mode,
+            user_simulator=user_simulator
         )
         
     except KeyboardInterrupt:
