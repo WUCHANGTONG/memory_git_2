@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 # 尝试导入 langchain，如果不存在则使用直接 HTTP 调用
 try:
     from langchain_community.chat_models import ChatTongyi
-    from langchain.prompts import ChatPromptTemplate
+    from langchain_core.prompts import ChatPromptTemplate
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
