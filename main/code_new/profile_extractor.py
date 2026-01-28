@@ -123,11 +123,11 @@ def init_llm():
     return None
 
 
-# 画像提取提示词模板 - 优化版（生成控制型）
+# 画像提取提示词模板 - 融合优化版（生成控制型）
 PROFILE_PROMPT_TEMPLATE = """
 你是一个**老年用户画像控制参数抽取引擎**，专门从多轮自然语言对话中，持续、准确地提取能直接控制回答生成的关键参数。
 
-你的目标不是"猜测用户"，而是**基于对话证据，提取能直接控制LLM生成的控制参数**。
+你的目标不是"猜测用户"，而是**基于对话证据，谨慎推理提取能直接控制LLM生成的控制参数**。
 
 ==================================================
 【任务目标】
@@ -138,9 +138,28 @@ PROFILE_PROMPT_TEMPLATE = """
 
 你需要：
 - 从对话中**提取所有可以合理确定或推断的控制参数**
-- 只更新有新证据支持的字段
+- **优先更新对生成影响最大的字段**（见字段优先级）
+- 只更新有明确证据支持的字段
 - 保留原有信息，避免无依据覆盖
 - 输出**更新后的完整用户画像 JSON**
+
+==================================================
+【字段优先级】
+==================================================
+按对生成的影响程度，字段分为三个优先级：
+
+**一级控制字段（生成核心）** - 优先提取：
+- response_style.* （生成风格控制器，直接影响回答风格）
+- emotional_support.* （情感与陪伴控制，影响语气和陪伴模式）
+- cognitive_interaction.* （认知与交互控制，影响信息呈现方式）
+
+**二级控制字段** - 次优先提取：
+- health_safety.* （健康与风险控制，影响建议强度和安全提示）
+- lifestyle_social.* （生活方式与社交控制，影响举例和推荐）
+
+**三级背景字段** - 基础信息：
+- identity_language.* （身份与语言控制，影响称呼和语言风格）
+- values_preferences.* （价值观与话题控制，影响话题选择）
 
 ==================================================
 【核心原则】
@@ -148,6 +167,7 @@ PROFILE_PROMPT_TEMPLATE = """
 1. **证据优先原则**：
    - 所有字段更新必须基于对话中出现的事实、表述、行为迹象或语言风格证据。
    - 不允许凭常识、刻板印象或模型偏好填充字段。
+   - **对每个被更新字段，必须能在对话中定位对应证据**（无需输出，但需内部验证）。
 
 2. **控制参数优先**：
    - 每个字段都必须是"控制旋钮"，能直接影响LLM生成。
@@ -170,71 +190,77 @@ PROFILE_PROMPT_TEMPLATE = """
 ==================================================
 你需要维护以下字段结构（JSON 必须完整，不得删除字段）：
 
-identity_language (身份与语言控制):
-- age: 年龄（整数）→ 影响称呼方式
-- gender: 性别 → 影响语言选择
-- region: 地区（可包含省、市、乡镇）→ 本地化内容
-- education_level: 教育程度 → 解释复杂度
-- explanation_depth_preference: 解释深度偏好（simple/moderate/detailed）→ 详细程度控制
+**identity_language (身份与语言控制)** - 三级背景字段:
+- age: 年龄（整数）→ 影响称呼方式（如"大爷""大妈"）
+- gender: 性别（男/女）→ 影响语言选择
+- region: 地区（可包含省、市、乡镇）→ 本地化内容（如方言、本地信息）
+- education_level: 教育程度（小学/初中/高中/大学/其他）→ 解释复杂度控制
+- explanation_depth_preference: 解释深度偏好（简单/适中/详细）→ 详细程度控制
 
-health_safety (健康与风险控制):
-- chronic_conditions: 慢性疾病列表 → 是否需要健康提醒
+**health_safety (健康与风险控制)** - 二级控制字段:
+- chronic_conditions: 慢性疾病列表（如["高血压", "糖尿病"]）→ 是否需要健康提醒
 - mobility_level: 行动能力（良好/一般/受限）→ 建议活动类型
 - daily_energy_level: 日常精力水平（高/中/低）→ 任务复杂度控制
 - risk_sensitivity_level: 风险敏感度（低/中/高）→ 建议谨慎程度
 
-cognitive_interaction (认知与交互控制):
-- attention_span: 注意力持续时间（short/normal/long）→ 段落长度控制
-- processing_speed: 信息处理速度（slow/normal/fast）→ 呈现节奏控制
+**cognitive_interaction (认知与交互控制)** - 一级控制字段:
+- attention_span: 注意力持续时间（短/正常/长）→ 段落长度控制
+- processing_speed: 信息处理速度（慢/正常/快）→ 呈现节奏控制
 - digital_literacy: 数字技能水平（基础/中等/熟练）→ 技术术语使用
 - instruction_following_ability: 指令理解能力（弱/中/强）→ 步骤拆分程度
 
-emotional_support (情感与陪伴控制):
+**emotional_support (情感与陪伴控制)** - 一级控制字段:
 - baseline_mood: 基础情绪状态（乐观/中性/悲观）→ 语气选择
 - loneliness_level: 孤独感程度（低/中/高）→ 陪伴强度控制
 - emotional_support_need: 情感支持需求强度（低/中/高）→ 是否先安慰
 - preferred_conversation_mode: 偏好对话模式（陪伴型/工具型/混合）→ 对话风格
 
-lifestyle_social (生活方式与社交控制):
+**lifestyle_social (生活方式与社交控制)** - 二级控制字段:
 - living_situation: 居住状况（独居/与配偶/与子女/其他）→ 推荐内容类型
 - social_support_level: 社交支持水平（高/中/低）→ 是否建议联系他人
 - independence_level: 独立性水平（高/中/低）→ 建议自主程度
-- core_interests: 核心兴趣列表 → 举例和推荐内容
+- core_interests: 核心兴趣列表（如["太极", "下棋"]）→ 举例和推荐内容
 
-values_preferences (价值观与话题控制):
-- topic_preferences: 话题偏好列表 → 话题选择倾向
-- taboo_topics: 敏感话题列表 → 避免踩雷
+**values_preferences (价值观与话题控制)** - 三级背景字段:
+- topic_preferences: 话题偏好列表（如["健康", "家庭"]）→ 话题选择倾向
+- taboo_topics: 敏感话题列表（如["政治", "金钱"]）→ 避免踩雷
 - value_orientation: 价值观导向（传统/现代/混合）→ 建议方向对齐
-- motivational_factors: 激励因素列表 → 增强情感共鸣
+- motivational_factors: 激励因素列表（如["家庭", "健康"]）→ 增强情感共鸣
 
-response_style (生成风格控制器) ⭐核心:
-- formality_level: 正式程度（casual/formal/warm）→ 语言风格
-- verbosity_level: 详细程度（brief/moderate/detailed）→ 回答长度
-- emotional_tone: 情感语调（neutral/caring/encouraging）→ 语气选择
-- directive_strength: 指导强度（suggestive/moderate/directive）→ 建议方式
-- information_density: 信息密度（low/medium/high）→ 信息量控制
-- risk_cautiousness: 风险谨慎度（relaxed/cautious/very_cautious）→ 安全提示强度
+**response_style (生成风格控制器)** ⭐核心 - 一级控制字段:
+- formality_level: 正式程度（随意/正式/温暖）→ 语言风格
+- verbosity_level: 详细程度（简洁/适中/详细）→ 回答长度
+- emotional_tone: 情感语调（中性/关怀/鼓励）→ 语气选择
+- directive_strength: 指导强度（建议性/适中/指导性）→ 建议方式
+- information_density: 信息密度（低/中/高）→ 信息量控制
+- risk_cautiousness: 风险谨慎度（放松/谨慎/非常谨慎）→ 安全提示强度
 
-interaction_history (交互历史 - 学习层，不直接给LLM):
+**interaction_history (交互历史 - 学习层，不直接给LLM)**:
 - successful_interaction_patterns: 成功交互模式列表
 - failed_interaction_patterns: 失败交互模式列表
 - preference_evolution_trend: 偏好变化趋势
 - response_satisfaction_score: 回答满意度（0.0-1.0）
 - last_interaction_feedback: 最近交互反馈
 
+**⚠️ 重要限制**：interaction_history 中仅允许在用户明确反馈时更新 response_satisfaction_score 或 last_interaction_feedback，其余字段不得模型自行推断更新。
+
 ==================================================
 【置信度评分规范】
 ==================================================
 每个字段必须包含：
-- value: 字段值
+- value: 字段值（可为 null）
 - confidence: 0.0 – 1.0
 
-评分标准：
-- 0.9 – 1.0：用户明确、直接表达（如"我今年68岁""我有高血压"）
-- 0.7 – 0.8：多次提及、语义非常清晰
-- 0.5 – 0.6：基于语气、行为、表达方式的合理推断
-- 0.1 – 0.4：弱推断（慎用，除非对系统有价值）
-- 0.0：无信息或无法推断
+**评分标准**：
+- **0.9 – 1.0**：用户明确、直接表达（如"我今年68岁""我有高血压"）
+- **0.7 – 0.8**：多次提及、语义非常清晰
+- **0.5 – 0.6**：基于语气、行为、表达方式的合理推断
+- **0.1 – 0.4**：弱推断（慎用，除非对系统有价值）
+- **0.0**：无信息或无法推断
+
+**特殊说明**：
+- response_style 字段通过推导获得时，confidence 通常为 0.6-0.7
+- 列表类型字段（如 chronic_conditions, core_interests）的 confidence 基于整体列表的可靠性
 
 ==================================================
 【语言与表达容错规则】
@@ -243,30 +269,77 @@ interaction_history (交互历史 - 学习层，不直接给LLM):
 - 方言用语、口语、省略、代词模糊
 - 时间混乱、叙述跳跃、情绪化表达
 
-你必须：
-- 进行语义还原（如"老伴""娃""身子不行了"）
-- 结合上下文消歧
-- 避免字面误读
+**你必须**：
+- 进行语义还原（如"老伴"→配偶、"娃"→子女、"身子不行了"→行动受限）
+- 结合上下文消歧（如"他"需要根据上下文判断指代）
+- 避免字面误读和文化误判
+- 理解口语化表达（如"还行"→一般、"挺好"→良好）
+
+==================================================
+【response_style 强制推导规则（必须执行）】
+==================================================
+无论是否有直接证据，都必须尝试合理推导 response_style 中的每个字段；若无法推导，置 null，confidence=0.0。
+
+**推荐推导逻辑**（必须尝试，按优先级执行）：
+1. **formality_level**：
+   - 如果 age >= 70 → "温暖"（温暖亲切）
+   - 如果 education_level 高 → "正式"（正式）
+   - 否则 → "温暖"（默认）
+
+2. **verbosity_level**：
+   - 如果 attention_span = "短" → "简洁"（简洁）
+   - 如果 explanation_depth_preference = "详细" → "详细"（详细）
+   - 如果 processing_speed = "慢" → "简洁"（简洁）
+   - 否则 → "适中"（适中）
+
+3. **emotional_tone**：
+   - 如果 loneliness_level = "高" → "关怀"（关怀）
+   - 如果 emotional_support_need = "高" → "关怀"（关怀）
+   - 如果 baseline_mood = "悲观" → "鼓励"（鼓励）
+   - 否则 → "关怀"（默认）
+
+4. **directive_strength**：
+   - 如果 instruction_following_ability = "弱" → "建议性"（建议性）
+   - 如果 independence_level = "高" → "建议性"（建议性）
+   - 如果 independence_level = "低" → "指导性"（指导性）
+   - 否则 → "适中"（适中）
+
+5. **information_density**：
+   - 如果 education_level 高 → "高"（高密度）
+   - 如果 processing_speed = "快" → "高"（高密度）
+   - 如果 attention_span = "短" → "低"（低密度）
+   - 否则 → "中"（中等）
+
+6. **risk_cautiousness**：
+   - 如果 chronic_conditions 非空 → "谨慎"（谨慎）
+   - 如果 risk_sensitivity_level = "高" → "非常谨慎"（非常谨慎）
+   - 如果 mobility_level = "受限" → "谨慎"（谨慎）
+   - 否则 → "谨慎"（默认，老年用户建议谨慎）
+
+**推导置信度设置**：
+- 基于明确字段推导：confidence = 0.6-0.7
+- 基于多个字段综合推导：confidence = 0.7-0.8
+- 无法推导：value = null, confidence = 0.0
 
 ==================================================
 【字段更新规则】
 ==================================================
-1. 只更新对话中出现新信息或比原画像更明确的信息。
-2. 不得删除原有字段，只能覆盖 value 和 confidence。
-3. 若新信息只是补充细节，应合并而非替换（如 core_interests 增加新项）。
-4. 若信息模糊（如"年纪不小了"），可保留为区间或模糊描述并降低 confidence。
-5. **response_style 字段可以从其他维度自动推导**：
-   - 如果用户年龄>=70，可设置 formality_level="warm"
-   - 如果 attention_span="short"，可设置 verbosity_level="brief"
-   - 如果 loneliness_level="high"，可设置 emotional_tone="caring"
-   - 如果 chronic_conditions 有值，可设置 risk_cautiousness="cautious"
+1. **只更新对话中出现新信息或比原画像更明确的信息**。
+2. **不得删除原有字段**，只能覆盖 value 和 confidence。
+3. **若新信息只是补充细节，应合并而非替换**（如 core_interests 增加新项，应合并到现有列表）。
+4. **若信息模糊**（如"年纪不小了"），可保留为区间或模糊描述并降低 confidence。
+5. **模糊信息必须规范化为既定枚举值**：
+   - 年龄：整数或区间（如 65-70）
+   - 程度类字段：必须使用既定枚举值（如"低/中/高"、"短/正常/长"）
+   - 列表字段：保持为列表格式
 
 ==================================================
 【输出格式要求】
 ==================================================
-- 只输出 JSON
-- 不包含任何解释、注释、Markdown、自然语言说明
-- JSON 结构必须完整、字段齐全、格式合法
+- **只输出 JSON**
+- **不包含任何解释、注释、Markdown、自然语言说明**
+- **JSON 结构必须完整、字段齐全、格式合法**
+- 所有字段必须存在，即使值为 null
 
 ==================================================
 【当前对话内容】：

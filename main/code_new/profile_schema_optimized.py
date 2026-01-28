@@ -77,12 +77,12 @@ class ValuesPreferences(BaseModel):
 
 class ResponseStyleController(BaseModel):
     """生成风格控制器 - 直接控制LLM生成参数的核心层"""
-    formality_level: FieldValue = Field(default_factory=FieldValue)  # 正式程度 (casual/formal/warm)
-    verbosity_level: FieldValue = Field(default_factory=FieldValue)  # 详细程度 (brief/moderate/detailed)
-    emotional_tone: FieldValue = Field(default_factory=FieldValue)  # 情感语调 (neutral/caring/encouraging)
-    directive_strength: FieldValue = Field(default_factory=FieldValue)  # 指导强度 (suggestive/moderate/directive)
-    information_density: FieldValue = Field(default_factory=FieldValue)  # 信息密度 (low/medium/high)
-    risk_cautiousness: FieldValue = Field(default_factory=FieldValue)  # 风险谨慎度 (relaxed/cautious/very_cautious)
+    formality_level: FieldValue = Field(default_factory=FieldValue)  # 正式程度 (随意/正式/温暖)
+    verbosity_level: FieldValue = Field(default_factory=FieldValue)  # 详细程度 (简洁/适中/详细)
+    emotional_tone: FieldValue = Field(default_factory=FieldValue)  # 情感语调 (中性/关怀/鼓励)
+    directive_strength: FieldValue = Field(default_factory=FieldValue)  # 指导强度 (建议性/适中/指导性)
+    information_density: FieldValue = Field(default_factory=FieldValue)  # 信息密度 (低/中/高)
+    risk_cautiousness: FieldValue = Field(default_factory=FieldValue)  # 风险谨慎度 (放松/谨慎/非常谨慎)
 
 
 # ==================== 解释学习层 ====================
@@ -126,26 +126,26 @@ class OptimizedUserProfile(BaseModel):
         """获取LLM生成控制参数 - 这是最重要的接口"""
         return {
             # 语言风格控制
-            "formality_level": self.response_style.formality_level.value or "warm",
-            "verbosity_level": self.response_style.verbosity_level.value or "moderate", 
-            "emotional_tone": self.response_style.emotional_tone.value or "caring",
+            "formality_level": self.response_style.formality_level.value or "温暖",
+            "verbosity_level": self.response_style.verbosity_level.value or "适中", 
+            "emotional_tone": self.response_style.emotional_tone.value or "关怀",
             
             # 内容控制
-            "information_density": self.response_style.information_density.value or "medium",
-            "explanation_depth": self.identity_language.explanation_depth_preference.value or "moderate",
-            "directive_strength": self.response_style.directive_strength.value or "suggestive",
+            "information_density": self.response_style.information_density.value or "中",
+            "explanation_depth": self.identity_language.explanation_depth_preference.value or "适中",
+            "directive_strength": self.response_style.directive_strength.value or "建议性",
             
             # 安全控制
-            "risk_cautiousness": self.response_style.risk_cautiousness.value or "cautious",
+            "risk_cautiousness": self.response_style.risk_cautiousness.value or "谨慎",
             "health_awareness": bool(self.health_safety.chronic_conditions.value),
             
             # 认知适配
-            "attention_span": self.cognitive_interaction.attention_span.value or "normal",
-            "processing_speed": self.cognitive_interaction.processing_speed.value or "normal",
+            "attention_span": self.cognitive_interaction.attention_span.value or "正常",
+            "processing_speed": self.cognitive_interaction.processing_speed.value or "正常",
             
             # 情感支持
-            "emotional_support_need": self.emotional_support.emotional_support_need.value or "moderate",
-            "loneliness_level": self.emotional_support.loneliness_level.value or "low",
+            "emotional_support_need": self.emotional_support.emotional_support_need.value or "中",
+            "loneliness_level": self.emotional_support.loneliness_level.value or "低",
             
             # 个性化内容
             "core_interests": self.lifestyle_social.core_interests.value or [],
@@ -161,28 +161,38 @@ class OptimizedUserProfile(BaseModel):
         control_instructions = []
         
         # 语言风格
-        if params["formality_level"] == "warm":
+        if params["formality_level"] == "温暖":
             control_instructions.append("使用温暖亲切的语调")
-        elif params["formality_level"] == "formal":
+        elif params["formality_level"] == "正式":
             control_instructions.append("使用正式礼貌的语言")
+        elif params["formality_level"] == "随意":
+            control_instructions.append("使用轻松随意的语言")
         
         # 详细程度
-        if params["verbosity_level"] == "brief":
+        if params["verbosity_level"] == "简洁":
             control_instructions.append("回答简洁明了")
-        elif params["verbosity_level"] == "detailed":
+        elif params["verbosity_level"] == "详细":
             control_instructions.append("提供详细解释")
+        elif params["verbosity_level"] == "适中":
+            control_instructions.append("回答适度详细")
         
         # 认知适配
-        if params["attention_span"] == "short":
+        if params["attention_span"] == "短":
             control_instructions.append("分段呈现信息，避免长段落")
+        elif params["attention_span"] == "长":
+            control_instructions.append("可以提供较长的段落和详细说明")
         
         # 情感支持
-        if params["emotional_support_need"] == "high":
+        if params["emotional_support_need"] == "高":
             control_instructions.append("优先提供情感关怀和支持")
+        elif params["emotional_support_need"] == "中":
+            control_instructions.append("适度提供情感关怀")
         
         # 安全控制
-        if params["risk_cautiousness"] == "very_cautious":
+        if params["risk_cautiousness"] == "非常谨慎":
             control_instructions.append("对健康和安全建议要格外谨慎")
+        elif params["risk_cautiousness"] == "谨慎":
+            control_instructions.append("对健康和安全建议保持谨慎")
         
         # 个性化内容
         if params["core_interests"]:
@@ -248,11 +258,11 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
             # 从记忆状况推导注意力
             memory = v1_cog["memory_status"]["value"]
             if memory in ["健忘", "记性不好", "记忆差"]:
-                opt_cog["attention_span"] = {"value": "short", "confidence": v1_cog["memory_status"].get("confidence", 0.6)}
+                opt_cog["attention_span"] = {"value": "短", "confidence": v1_cog["memory_status"].get("confidence", 0.6)}
         if "expression_fluency" in v1_cog and v1_cog["expression_fluency"].get("value") is not None:
             fluency = v1_cog["expression_fluency"]["value"]
             if fluency in ["不流畅", "困难"]:
-                opt_cog["processing_speed"] = {"value": "slow", "confidence": v1_cog["expression_fluency"].get("confidence", 0.6)}
+                opt_cog["processing_speed"] = {"value": "慢", "confidence": v1_cog["expression_fluency"].get("confidence", 0.6)}
     
     if "emotional" in v1_profile:
         v1_emo = v1_profile["emotional"]
@@ -294,12 +304,12 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
             comm_style = v1_pref["communication_style"]["value"]
             conf = v1_pref["communication_style"].get("confidence", 0.7)
             if "温和" in comm_style or "亲切" in comm_style:
-                opt_style["formality_level"] = {"value": "warm", "confidence": conf}
-                opt_style["emotional_tone"] = {"value": "caring", "confidence": conf}
+                opt_style["formality_level"] = {"value": "温暖", "confidence": conf}
+                opt_style["emotional_tone"] = {"value": "关怀", "confidence": conf}
             elif "正式" in comm_style:
-                opt_style["formality_level"] = {"value": "formal", "confidence": conf}
+                opt_style["formality_level"] = {"value": "正式", "confidence": conf}
             elif "简洁" in comm_style or "直接" in comm_style:
-                opt_style["verbosity_level"] = {"value": "brief", "confidence": conf}
+                opt_style["verbosity_level"] = {"value": "简洁", "confidence": conf}
     
     # 自动推导 response_style 的其他字段
     opt_style = optimized["response_style"]
@@ -313,22 +323,22 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
         age = opt_identity["age"]["value"]
         if isinstance(age, int) and age >= 70:
             if opt_style["formality_level"].get("value") is None:
-                opt_style["formality_level"] = {"value": "warm", "confidence": 0.7}
+                opt_style["formality_level"] = {"value": "温暖", "confidence": 0.7}
     
     # 从注意力推导详细程度
-    if opt_cog["attention_span"].get("value") == "short":
+    if opt_cog["attention_span"].get("value") == "短":
         if opt_style["verbosity_level"].get("value") is None:
-            opt_style["verbosity_level"] = {"value": "brief", "confidence": 0.7}
+            opt_style["verbosity_level"] = {"value": "简洁", "confidence": 0.7}
     
     # 从孤独感推导情感语调
     if opt_emo["loneliness_level"].get("value") in ["高", "很高"]:
         if opt_style["emotional_tone"].get("value") is None:
-            opt_style["emotional_tone"] = {"value": "caring", "confidence": 0.7}
+            opt_style["emotional_tone"] = {"value": "关怀", "confidence": 0.7}
     
     # 从慢性病推导风险谨慎度
     if opt_health["chronic_conditions"].get("value") and len(opt_health["chronic_conditions"]["value"]) > 0:
         if opt_style["risk_cautiousness"].get("value") is None:
-            opt_style["risk_cautiousness"] = {"value": "cautious", "confidence": 0.7}
+            opt_style["risk_cautiousness"] = {"value": "谨慎", "confidence": 0.7}
     
     return optimized
 
@@ -357,11 +367,11 @@ class GenerationController:
         
         # 这里可以实现后处理逻辑
         # 例如：根据attention_span调整段落长度
-        if params["attention_span"] == "short":
+        if params["attention_span"] == "短":
             response = GenerationController._break_into_short_paragraphs(response)
         
         # 根据verbosity_level调整详细程度
-        if params["verbosity_level"] == "brief":
+        if params["verbosity_level"] == "简洁":
             response = GenerationController._make_concise(response)
         
         return response
@@ -389,10 +399,10 @@ def example_usage():
     profile = OptimizedUserProfile()
     
     # 2. 设置一些控制参数
-    profile.response_style.formality_level.value = "warm"
-    profile.response_style.verbosity_level.value = "moderate"
-    profile.cognitive_interaction.attention_span.value = "short"
-    profile.emotional_support.emotional_support_need.value = "high"
+    profile.response_style.formality_level.value = "温暖"
+    profile.response_style.verbosity_level.value = "适中"
+    profile.cognitive_interaction.attention_span.value = "短"
+    profile.emotional_support.emotional_support_need.value = "高"
     
     # 3. 获取生成控制参数
     control_params = profile.get_generation_control_params()

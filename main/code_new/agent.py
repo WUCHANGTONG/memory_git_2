@@ -16,148 +16,105 @@ from profile_schema_optimized import init_optimized_profile
 
 def show_profile_summary(profile: Dict[str, Any]):
     """
-    显示用户画像摘要（只显示有值的字段）- 优化版结构
+    显示用户画像摘要（显示所有字段）- 优化版结构
     
     Args:
         profile: 用户画像字典（优化版结构）
     """
-    print("\n" + "="*50)
-    print("用户画像摘要（优化版）")
-    print("="*50)
+    def format_field_value(field_dict: Dict[str, Any], field_name: str) -> str:
+        """格式化字段值显示"""
+        value = field_dict.get("value")
+        confidence = field_dict.get("confidence", 0.0)
+        
+        if value is None:
+            display_value = "未设置"
+        elif isinstance(value, list):
+            if len(value) == 0:
+                display_value = "[]"
+            else:
+                display_value = ", ".join(str(v) for v in value)
+        else:
+            display_value = str(value)
+        
+        # 如果有值，显示置信度
+        if value is not None:
+            return f"{field_name}: {display_value} (置信度: {confidence:.2f})"
+        else:
+            return f"{field_name}: {display_value}"
+    
+    print("\n" + "="*70)
+    print("用户画像摘要（优化版）- 所有字段")
+    print("="*70)
     
     # 身份与语言
     identity = profile.get("identity_language", {})
-    identity_info = []
-    if identity.get("age", {}).get("value"):
-        identity_info.append(f"年龄: {identity['age']['value']}岁")
-    if identity.get("gender", {}).get("value"):
-        identity_info.append(f"性别: {identity['gender']['value']}")
-    if identity.get("region", {}).get("value"):
-        identity_info.append(f"地区: {identity['region']['value']}")
-    if identity.get("education_level", {}).get("value"):
-        identity_info.append(f"教育: {identity['education_level']['value']}")
-    if identity.get("explanation_depth_preference", {}).get("value"):
-        identity_info.append(f"解释深度: {identity['explanation_depth_preference']['value']}")
-    
-    if identity_info:
-        print("\n【身份与语言】")
-        print("  " + " | ".join(identity_info))
+    print("\n【身份与语言】")
+    print(f"  {format_field_value(identity.get('age', {}), '年龄')}")
+    print(f"  {format_field_value(identity.get('gender', {}), '性别')}")
+    print(f"  {format_field_value(identity.get('region', {}), '地区')}")
+    print(f"  {format_field_value(identity.get('education_level', {}), '教育程度')}")
+    print(f"  {format_field_value(identity.get('explanation_depth_preference', {}), '解释深度偏好')}")
     
     # 健康与安全
     health = profile.get("health_safety", {})
-    health_info = []
-    if health.get("chronic_conditions", {}).get("value"):
-        conditions = health['chronic_conditions']['value']
-        if isinstance(conditions, list) and conditions:
-            health_info.append(f"慢性病: {', '.join(conditions)}")
-    if health.get("mobility_level", {}).get("value"):
-        health_info.append(f"行动能力: {health['mobility_level']['value']}")
-    if health.get("daily_energy_level", {}).get("value"):
-        health_info.append(f"精力水平: {health['daily_energy_level']['value']}")
-    if health.get("risk_sensitivity_level", {}).get("value"):
-        health_info.append(f"风险敏感度: {health['risk_sensitivity_level']['value']}")
-    
-    if health_info:
-        print("\n【健康与安全】")
-        print("  " + " | ".join(health_info))
+    print("\n【健康与安全】")
+    print(f"  {format_field_value(health.get('chronic_conditions', {}), '慢性疾病')}")
+    print(f"  {format_field_value(health.get('mobility_level', {}), '行动能力')}")
+    print(f"  {format_field_value(health.get('daily_energy_level', {}), '日常精力水平')}")
+    print(f"  {format_field_value(health.get('risk_sensitivity_level', {}), '风险敏感度')}")
     
     # 认知与交互
     cognitive = profile.get("cognitive_interaction", {})
-    cognitive_info = []
-    if cognitive.get("attention_span", {}).get("value"):
-        cognitive_info.append(f"注意力: {cognitive['attention_span']['value']}")
-    if cognitive.get("processing_speed", {}).get("value"):
-        cognitive_info.append(f"处理速度: {cognitive['processing_speed']['value']}")
-    if cognitive.get("digital_literacy", {}).get("value"):
-        cognitive_info.append(f"数字技能: {cognitive['digital_literacy']['value']}")
-    if cognitive.get("instruction_following_ability", {}).get("value"):
-        cognitive_info.append(f"指令理解: {cognitive['instruction_following_ability']['value']}")
-    
-    if cognitive_info:
-        print("\n【认知与交互】")
-        print("  " + " | ".join(cognitive_info))
+    print("\n【认知与交互】")
+    print(f"  {format_field_value(cognitive.get('attention_span', {}), '注意力持续时间')}")
+    print(f"  {format_field_value(cognitive.get('processing_speed', {}), '信息处理速度')}")
+    print(f"  {format_field_value(cognitive.get('digital_literacy', {}), '数字技能水平')}")
+    print(f"  {format_field_value(cognitive.get('instruction_following_ability', {}), '指令理解能力')}")
     
     # 情感与支持
     emotional = profile.get("emotional_support", {})
-    emotional_info = []
-    if emotional.get("baseline_mood", {}).get("value"):
-        emotional_info.append(f"基础情绪: {emotional['baseline_mood']['value']}")
-    if emotional.get("loneliness_level", {}).get("value"):
-        emotional_info.append(f"孤独感: {emotional['loneliness_level']['value']}")
-    if emotional.get("emotional_support_need", {}).get("value"):
-        emotional_info.append(f"情感支持需求: {emotional['emotional_support_need']['value']}")
-    if emotional.get("preferred_conversation_mode", {}).get("value"):
-        emotional_info.append(f"对话模式: {emotional['preferred_conversation_mode']['value']}")
-    
-    if emotional_info:
-        print("\n【情感与支持】")
-        print("  " + " | ".join(emotional_info))
+    print("\n【情感与支持】")
+    print(f"  {format_field_value(emotional.get('baseline_mood', {}), '基础情绪状态')}")
+    print(f"  {format_field_value(emotional.get('loneliness_level', {}), '孤独感程度')}")
+    print(f"  {format_field_value(emotional.get('emotional_support_need', {}), '情感支持需求强度')}")
+    print(f"  {format_field_value(emotional.get('preferred_conversation_mode', {}), '偏好对话模式')}")
     
     # 生活方式与社交
     lifestyle = profile.get("lifestyle_social", {})
-    lifestyle_info = []
-    if lifestyle.get("living_situation", {}).get("value"):
-        lifestyle_info.append(f"居住状况: {lifestyle['living_situation']['value']}")
-    if lifestyle.get("social_support_level", {}).get("value"):
-        lifestyle_info.append(f"社交支持: {lifestyle['social_support_level']['value']}")
-    if lifestyle.get("independence_level", {}).get("value"):
-        lifestyle_info.append(f"独立性: {lifestyle['independence_level']['value']}")
-    if lifestyle.get("core_interests", {}).get("value"):
-        interests = lifestyle['core_interests']['value']
-        if isinstance(interests, list) and interests:
-            lifestyle_info.append(f"核心兴趣: {', '.join(interests)}")
-    
-    if lifestyle_info:
-        print("\n【生活方式与社交】")
-        print("  " + " | ".join(lifestyle_info))
+    print("\n【生活方式与社交】")
+    print(f"  {format_field_value(lifestyle.get('living_situation', {}), '居住状况')}")
+    print(f"  {format_field_value(lifestyle.get('social_support_level', {}), '社交支持水平')}")
+    print(f"  {format_field_value(lifestyle.get('independence_level', {}), '独立性水平')}")
+    print(f"  {format_field_value(lifestyle.get('core_interests', {}), '核心兴趣')}")
     
     # 价值观与偏好
     values = profile.get("values_preferences", {})
-    values_info = []
-    if values.get("topic_preferences", {}).get("value"):
-        topics = values['topic_preferences']['value']
-        if isinstance(topics, list) and topics:
-            values_info.append(f"话题偏好: {', '.join(topics)}")
-    if values.get("taboo_topics", {}).get("value"):
-        taboos = values['taboo_topics']['value']
-        if isinstance(taboos, list) and taboos:
-            values_info.append(f"敏感话题: {', '.join(taboos)}")
-    if values.get("value_orientation", {}).get("value"):
-        values_info.append(f"价值观: {values['value_orientation']['value']}")
-    if values.get("motivational_factors", {}).get("value"):
-        factors = values['motivational_factors']['value']
-        if isinstance(factors, list) and factors:
-            values_info.append(f"激励因素: {', '.join(factors)}")
-    
-    if values_info:
-        print("\n【价值观与偏好】")
-        print("  " + " | ".join(values_info))
+    print("\n【价值观与偏好】")
+    print(f"  {format_field_value(values.get('topic_preferences', {}), '话题偏好')}")
+    print(f"  {format_field_value(values.get('taboo_topics', {}), '敏感话题')}")
+    print(f"  {format_field_value(values.get('value_orientation', {}), '价值观导向')}")
+    print(f"  {format_field_value(values.get('motivational_factors', {}), '激励因素')}")
     
     # 生成风格控制器
     style = profile.get("response_style", {})
-    style_info = []
-    if style.get("formality_level", {}).get("value"):
-        style_info.append(f"正式程度: {style['formality_level']['value']}")
-    if style.get("verbosity_level", {}).get("value"):
-        style_info.append(f"详细程度: {style['verbosity_level']['value']}")
-    if style.get("emotional_tone", {}).get("value"):
-        style_info.append(f"情感语调: {style['emotional_tone']['value']}")
-    if style.get("directive_strength", {}).get("value"):
-        style_info.append(f"指导强度: {style['directive_strength']['value']}")
-    if style.get("information_density", {}).get("value"):
-        style_info.append(f"信息密度: {style['information_density']['value']}")
-    if style.get("risk_cautiousness", {}).get("value"):
-        style_info.append(f"风险谨慎度: {style['risk_cautiousness']['value']}")
+    print("\n【生成风格控制器】⭐")
+    print(f"  {format_field_value(style.get('formality_level', {}), '正式程度')}")
+    print(f"  {format_field_value(style.get('verbosity_level', {}), '详细程度')}")
+    print(f"  {format_field_value(style.get('emotional_tone', {}), '情感语调')}")
+    print(f"  {format_field_value(style.get('directive_strength', {}), '指导强度')}")
+    print(f"  {format_field_value(style.get('information_density', {}), '信息密度')}")
+    print(f"  {format_field_value(style.get('risk_cautiousness', {}), '风险谨慎度')}")
     
-    if style_info:
-        print("\n【生成风格控制】")
-        print("  " + " | ".join(style_info))
+    # 交互历史（学习层）
+    history = profile.get("interaction_history", {})
+    print("\n【交互历史】（学习层，不直接用于生成）")
+    print(f"  {format_field_value(history.get('successful_interaction_patterns', {}), '成功交互模式')}")
+    print(f"  {format_field_value(history.get('failed_interaction_patterns', {}), '失败交互模式')}")
+    print(f"  {format_field_value(history.get('preference_evolution_trend', {}), '偏好变化趋势')}")
+    print(f"  {format_field_value(history.get('response_satisfaction_score', {}), '回答满意度')}")
+    print(f"  {format_field_value(history.get('last_interaction_feedback', {}), '最近交互反馈')}")
     
-    # 如果没有信息
-    if not any([identity_info, health_info, cognitive_info, emotional_info, lifestyle_info, values_info, style_info]):
-        print("\n[提示] 当前画像为空，请开始对话以提取用户信息")
-    
-    print("="*50 + "\n")
+    print("\n" + "="*70 + "\n")
 
 
 def show_profile_updates(profile: Dict[str, Any], user_input: str):
