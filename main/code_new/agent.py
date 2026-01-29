@@ -8,6 +8,9 @@
 import asyncio
 import json
 import os
+import sys
+import threading
+import time
 from typing import Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
@@ -168,6 +171,137 @@ def show_profile_updates(profile: Dict[str, Any], user_input: str):
     print("[INFO] 画像已更新，输入 'show' 查看画像摘要，输入 'profile' 查看完整画像")
 
 
+async def process_user_message(
+    user_id: str,
+    user_input: str,
+    profile: Dict[str, Any],
+    memory_manager: ChatMemoryManager,
+    memu_store: MemUStore,
+    responder: Optional[Any] = None,
+    enable_personalized_response: bool = True
+) -> Dict[str, Any]:
+    """
+    处理用户消息（可被用户模拟器调用）
+    
+    Args:
+        user_id: 用户ID
+        user_input: 用户输入
+        profile: 当前用户画像
+        memory_manager: Memory管理器
+        memu_store: memU存储层
+        responder: 个性化回答生成器（可选）
+        enable_personalized_response: 是否开启个性化回答
+        
+    Returns:
+        {
+            "assistant_response": str,  # 助手回复
+            "updated_profile": Dict,     # 更新后的画像
+            "extraction_success": bool   # 画像提取是否成功
+        }
+    """
+    # 1. 保存用户消息
+    await memory_manager.add_message(user_id, "user", user_input)
+    
+    # 2. 提取画像
+    extraction_success = True
+    try:
+        updated_profile = update_profile(user_input, profile)
+    except Exception as e:
+        print(f"[WARN] 画像提取失败: {e}")
+        updated_profile = profile
+        extraction_success = False
+    
+    # 3. 保存画像
+    await memu_store.save_profile(user_id, updated_profile)
+    
+    # 4. 生成个性化回答（如果启用）
+    assistant_response = ""
+    if enable_personalized_response and responder:
+        try:
+            assistant_response = await responder.generate_response(
+                user_id,
+                user_input,
+                updated_profile
+            )
+            await memory_manager.add_message(user_id, "assistant", assistant_response)
+        except Exception as e:
+            print(f"[WARN] 个性化回答生成失败: {e}")
+            assistant_response = "[助手回复生成失败]"
+    else:
+        assistant_response = "[个性化回答功能已关闭]"
+    
+    return {
+        "assistant_response": assistant_response,
+        "updated_profile": updated_profile,
+        "extraction_success": extraction_success
+    }
+
+
+def input_with_countdown(
+    prompt: str,
+    countdown_seconds: int = 5,
+    default_choice: str = "y"
+) -> str:
+    """
+    带倒计时的输入函数
+    
+    只显示一次提示信息，用户可以在提示后直接输入。
+    如果倒计时结束前没有输入，返回默认值。
+    
+    Args:
+        prompt: 提示信息
+        countdown_seconds: 倒计时秒数
+        default_choice: 默认选择（倒计时结束后返回的值）
+        
+    Returns:
+        用户输入或默认选择
+    """
+    result_queue = []
+    input_received = threading.Event()
+    
+    def get_input():
+        """在单独线程中获取输入"""
+        try:
+            # 注意：这里不使用 input(prompt)，因为 prompt 已经在主线程中输出了
+            user_input = input().strip().lower()
+            result_queue.append(user_input)
+            input_received.set()
+        except EOFError:
+            result_queue.append(default_choice)
+            input_received.set()
+    
+    # 显示提示信息（只显示一次，不换行）
+    sys.stdout.write(f"{prompt}[{countdown_seconds}秒后自动继续] ")
+    sys.stdout.flush()
+    
+    # 启动输入线程
+    input_thread = threading.Thread(target=get_input, daemon=True)
+    input_thread.start()
+    
+    # 等待用户输入或倒计时结束
+    start_time = time.time()
+    while True:
+        if input_received.is_set():
+            # 用户已输入，等待线程完成
+            input_thread.join(timeout=0.1)
+            break
+        
+        elapsed = time.time() - start_time
+        if elapsed >= countdown_seconds:
+            # 倒计时结束，输出换行并返回默认值
+            print()  # 换行
+            return default_choice
+        
+        # 短暂休眠，避免CPU占用过高
+        time.sleep(0.1)
+    
+    # 返回用户输入或默认值
+    if result_queue:
+        return result_queue[0]
+    else:
+        return default_choice
+
+
 async def chat_loop(user_id: str, profile: Dict[str, Any], 
                    memory_manager: ChatMemoryManager, 
                    memu_store: MemUStore,
@@ -197,7 +331,24 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
         print("  - 系统会提取并更新用户画像")
         if enable_personalized_response and responder:
             print("  - 系统会根据用户画像生成个性化回答")
-        print("  - 每轮对话后会询问是否继续")
+        
+        # 读取倒计时配置
+        countdown_enabled = True
+        countdown_seconds = 5
+        auto_continue = True
+        max_turns = None
+        
+        if user_simulator and hasattr(user_simulator, 'config'):
+            conv_config = user_simulator.config.get("conversation_config", {})
+            countdown_enabled = conv_config.get("countdown_enabled", True)
+            countdown_seconds = conv_config.get("countdown_seconds", 5)
+            auto_continue = conv_config.get("auto_continue", True)
+            max_turns = conv_config.get("max_turns", None)
+        
+        if countdown_enabled:
+            print(f"  - 每轮对话后有{countdown_seconds}秒倒计时，结束后自动继续")
+        else:
+            print("  - 每轮对话后会询问是否继续")
         print("\n" + "-"*60 + "\n")
         
         # 等待用户输入开始
@@ -210,52 +361,77 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
         
         while True:
             try:
+                # 检查最大轮数限制
+                if max_turns is not None and turn >= max_turns:
+                    print(f"\n[INFO] 已达到最大对话轮数 ({max_turns})，结束对话")
+                    break
+                
                 turn += 1
                 print(f"\n--- 第 {turn} 轮对话 ---\n")
                 
                 # 1. 生成用户消息
                 print("[INFO] 正在生成用户消息...")
-                user_message = user_simulator.generate_user_message(conversation_history)
-                print(f"用户: {user_message}\n")
-                
-                # 2. 保存用户消息
-                await memory_manager.add_message(user_id, "user", user_message)
-                conversation_history.append({"role": "user", "content": user_message})
-                
-                # 3. 提取画像
-                print("[INFO] 正在提取画像信息...")
                 try:
-                    profile = update_profile(user_message, profile)
-                    print("[OK] 画像提取完成")
+                    user_message = user_simulator.generate_user_message(conversation_history)
+                    if not user_message or not user_message.strip():
+                        print("[WARN] 生成的消息为空，跳过本轮")
+                        continue
+                    print(f"用户: {user_message}\n")
                 except Exception as e:
-                    print(f"[WARN] 画像提取失败: {e}")
+                    print(f"[ERROR] 生成用户消息失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue_choice = input("\n是否继续对话？(y/n): ").strip().lower()
+                    if continue_choice in ("n", "no", "exit", "quit"):
+                        break
+                    continue
                 
-                # 4. 保存画像
-                await memu_store.save_profile(user_id, profile)
-                
-                # 5. 生成助手回复
-                if enable_personalized_response and responder:
-                    print("\n[INFO] 正在生成个性化回答...")
-                    try:
-                        assistant_response = await responder.generate_response(
-                            user_id,
-                            user_message,
-                            profile
-                        )
-                        await memory_manager.add_message(user_id, "assistant", assistant_response)
-                        conversation_history.append({"role": "assistant", "content": assistant_response})
-                        print(f"助手: {assistant_response}\n")
-                    except Exception as e:
-                        print(f"[WARN] 个性化回答生成失败: {e}")
-                        assistant_response = "[助手回复生成失败]"
-                        conversation_history.append({"role": "assistant", "content": assistant_response})
-                else:
-                    assistant_response = "[个性化回答功能已关闭]"
+                # 2. 处理用户消息（保存、提取画像、生成回复）
+                print("[INFO] 正在处理用户消息...")
+                try:
+                    result = await process_user_message(
+                        user_id=user_id,
+                        user_input=user_message,
+                        profile=profile,
+                        memory_manager=memory_manager,
+                        memu_store=memu_store,
+                        responder=responder,
+                        enable_personalized_response=enable_personalized_response
+                    )
+                    
+                    # 更新画像和对话历史
+                    profile = result["updated_profile"]
+                    assistant_response = result["assistant_response"]
+                    
+                    # 更新对话历史
+                    conversation_history.append({"role": "user", "content": user_message})
                     conversation_history.append({"role": "assistant", "content": assistant_response})
+                    
+                    if result["extraction_success"]:
+                        print("[OK] 画像提取完成")
+                    else:
+                        print("[WARN] 画像提取失败，使用当前画像")
+                    
+                    print(f"助手: {assistant_response}\n")
+                    
+                except Exception as e:
+                    print(f"[ERROR] 处理用户消息失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 即使失败也记录对话历史
+                    conversation_history.append({"role": "user", "content": user_message})
+                    conversation_history.append({"role": "assistant", "content": "[处理失败]"})
                 
-                # 6. 询问是否继续
+                # 6. 询问是否继续（带倒计时）
                 print("-" * 60)
-                continue_choice = input("\n是否继续对话？(y/n，或输入 'exit' 退出): ").strip().lower()
+                if countdown_enabled:
+                    continue_choice = input_with_countdown(
+                        "\n是否继续对话？(y/n，或输入 'exit' 退出): ",
+                        countdown_seconds=countdown_seconds,
+                        default_choice="y" if auto_continue else "n"
+                    )
+                else:
+                    continue_choice = input("\n是否继续对话？(y/n，或输入 'exit' 退出): ").strip().lower()
                 
                 if continue_choice in ("n", "no", "exit", "quit"):
                     print("\n[INFO] 正在保存数据...")

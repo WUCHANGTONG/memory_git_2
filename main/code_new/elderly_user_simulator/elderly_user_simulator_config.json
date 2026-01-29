@@ -3,6 +3,77 @@
   "llm_config": {
     "model": "qwen-turbo",
     "temperature": 0.7
+  },
+  "ground_truth_profile": {
+    "identity_language": {
+      "age": {
+        "value": 68,
+        "confidence": 1.0,
+        "last_updated": null
+      },
+      "gender": {
+        "value": "女",
+        "confidence": 1.0,
+        "last_updated": null
+      },
+      "region": {
+        "value": "石家庄",
+        "confidence": 1.0,
+        "last_updated": null
+      },
+      "education_level": {
+        "value": "小学",
+        "confidence": 1.0,
+        "last_updated": null
+      }
+    },
+    "health_safety": {
+      "chronic_conditions": {
+        "value": ["高血压"],
+        "confidence": 1.0,
+        "last_updated": null
+      },
+      "mobility_level": {
+        "value": "正常",
+        "confidence": 1.0,
+        "last_updated": null
+      }
+    },
+    "lifestyle_social": {
+      "living_situation": {
+        "value": "独居",
+        "confidence": 1.0,
+        "last_updated": null
+      },
+      "core_interests": {
+        "value": ["广场舞", "养花"],
+        "confidence": 1.0,
+        "last_updated": null
+      }
+    },
+    "emotional_support": {
+      "loneliness_level": {
+        "value": "中",
+        "confidence": 1.0,
+        "last_updated": null
+      }
+    },
+    "cognitive_interaction": {},
+    "values_preferences": {},
+    "response_style": {},
+    "interaction_history": {}
+  },
+  "noise_model": {
+    "forgetfulness_rate": 0.1,
+    "vagueness_rate": 0.15,
+    "misleading_rate": 0.05,
+    "topic_hopping_rate": 0.2
+  },
+  "conversation_config": {
+    "countdown_enabled": true,
+    "countdown_seconds": 10,
+    "auto_continue": true,
+    "max_turns": null
   }
 }
 
