@@ -91,6 +91,7 @@ class MemUStore:
             raise ValueError("未设置 DASHSCOPE_API_KEY，请在 .env 文件中配置")
         
         service = MemoryService(
+            #memU 采用双模型架构：记忆组织靠 LLM，记忆检索靠 embedding
             llm_profiles={
                 "default": {
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -114,6 +115,17 @@ class MemUStore:
                     )
                 },
             },
+            #检索方式配置
+            # method="rag": 使用向量检索（embedding-based vector search）
+            #   - 快速：纯向量计算，使用余弦相似度
+            #   - 可扩展：适用于大型记忆存储
+            #   - 返回分数：每个结果包含相似度分数
+            # method="llm": 使用 LLM 推理检索
+            #   - 深度理解：LLM 理解上下文和细微差别
+            #   - 查询重写：在每个层级自动优化查询
+            #   - 自适应：当找到足够信息时提前停止
+            # 注意：无论使用哪种方式，返回结果中都会包含 needs_retrieval, rewritten_query, 
+            # next_step_query 等字段（这些是 route_intention 功能产生的，不是区分检索方式的标志）
             retrieve_config={"method": "rag"},
         )
         return service
@@ -164,6 +176,57 @@ class MemUStore:
                 user={"user_id": user_id}
             )
             
+            # 打印完整的 result 结构（用于调试）
+            print(f"[DEBUG] 完整 result 结构: {json.dumps(result, ensure_ascii=False, indent=2, default=str)}")
+            
+            # 调试：打印存储结果
+            items_count = len(result.get("items", []))
+            resources_count = len(result.get("resources", []))
+            resource = result.get("resource")  # 单个资源
+            if resource:
+                resources_count = 1
+            print(f"[DEBUG] 画像存储结果: resource={resources_count}, items={items_count}")
+            if resource:
+                print(f"[DEBUG] 存储的 resource: id={resource.get('id', 'N/A')}, local_path={resource.get('local_path', 'N/A')}")
+            elif result.get("resources"):
+                for res in result.get("resources", []):
+                    print(f"[DEBUG] 存储的 resource: url={res.get('url', 'N/A')}, id={res.get('id', 'N/A')}")
+            
+            # 立即验证：尝试检索刚存储的数据
+            print(f"[DEBUG] 开始验证存储是否成功（立即检索）...")
+            try:
+                import asyncio
+                await asyncio.sleep(0.5)  # 等待一小段时间确保数据已持久化
+                
+                # 调试：打印当前检索配置
+                current_method = service.retrieve_config.method
+                print(f"[DEBUG] 验证存储时的检索方式: method={current_method}")
+                
+                verify_result = await service.retrieve(
+                    queries=[{"role": "user", "content": {"text": f"用户 {user_id} 的画像信息"}}],
+                    where={"user_id": user_id}
+                )
+                
+                verify_items_count = len(verify_result.get("items", []))
+                verify_resources_count = len(verify_result.get("resources", []))
+                verify_categories_count = len(verify_result.get("categories", []))
+                
+                print(f"[DEBUG] 检索验证结果: items={verify_items_count}, resources={verify_resources_count}, categories={verify_categories_count}")
+                
+                if verify_resources_count > 0 or verify_items_count > 0:
+                    print(f"[INFO] ✅ 存储验证成功: 可以检索到存储的数据")
+                    if verify_resources_count > 0:
+                        print(f"[INFO]   - 找到 {verify_resources_count} 个资源")
+                    if verify_items_count > 0:
+                        print(f"[INFO]   - 找到 {verify_items_count} 个记忆项")
+                else:
+                    print(f"[WARN] ⚠️  存储验证: 暂时无法检索到数据（可能需要更多时间持久化，或数据未正确存储）")
+                    
+            except Exception as e:
+                print(f"[DEBUG] 检索验证失败: {e}")
+                import traceback
+                traceback.print_exc()
+            
             # 同时保存到本地缓存（如果启用）
             if self.use_local_cache:
                 self._save_profile_to_cache(user_id, profile_data)
@@ -199,6 +262,21 @@ class MemUStore:
         Returns:
             Optional[Dict]: 用户画像字典，如果不存在则返回 None
         """
+        # 尝试从本地缓存加载的辅助函数
+        def try_load_from_cache() -> Optional[Dict[str, Any]]:
+            """尝试从本地缓存加载画像"""
+            if self.use_local_cache:
+                try:
+                    cached_profile = self._load_profile_from_cache(user_id)
+                    if cached_profile:
+                        return cached_profile.get("profile")
+                except Exception as e2:
+                    print(f"[ERROR] 从本地缓存加载也失败: {e2}")
+            return None
+        
+        # 标志变量：记录是否已经尝试过缓存
+        cache_tried = False
+        
         try:
             service = self._get_service()
             
@@ -207,45 +285,115 @@ class MemUStore:
                 {"role": "user", "content": {"text": f"用户 {user_id} 的画像信息"}}
             ]
             
+            # 调试：打印当前检索配置
+            current_method = service.retrieve_config.method
+            print(f"[DEBUG] 当前检索方式配置: method={current_method}")
+            print(f"[DEBUG] retrieve_config 完整配置: {service.retrieve_config.model_dump()}")
+            
             result = await service.retrieve(
                 queries=queries,
                 where={"user_id": user_id}
             )
             
+            # 在返回结果中添加 method 信息以便调试
+            result["_debug_retrieve_method"] = current_method
+            
+            # 调试：打印检索结果
+            print(f"[DEBUG] retrieve 返回结果: categories={len(result.get('categories', []))}, "
+                  f"items={len(result.get('items', []))}, resources={len(result.get('resources', []))}")
+            print(f"[DEBUG] 实际使用的检索方式: {current_method} (RAG=向量检索, LLM=LLM推理检索)")
+            
             # 从检索结果中提取画像
             # 查找包含 profile 信息的资源
             resources = result.get("resources", [])
             items = result.get("items", [])
+            categories = result.get("categories", [])
             
-            # 尝试从 items 中提取画像
-            for item in items:
-                if "profile" in item.get("summary", "").lower() or "画像" in item.get("summary", ""):
-                    # 尝试解析 JSON
+            # 调试：打印详细信息
+            if resources:
+                print(f"[DEBUG] resources 数量: {len(resources)}")
+                for idx, res in enumerate(resources[:3]):  # 只打印前3个
+                    print(f"[DEBUG] resource[{idx}]: url={res.get('url', 'N/A')}, modality={res.get('modality', 'N/A')}")
+            if items:
+                print(f"[DEBUG] items 数量: {len(items)}")
+                for idx, item in enumerate(items[:3]):  # 只打印前3个
+                    print(f"[DEBUG] item[{idx}]: summary={item.get('summary', 'N/A')[:100]}")
+            
+            # 优先从 resources 中查找画像（因为画像是以 document modality 存储的）
+            profile_found = False
+            for resource in resources:
+                url = resource.get("url", "")
+                modality = resource.get("modality", "")
+                local_path = resource.get("local_path", "")
+                # 检查是否是画像文件
+                if ("profile" in url.lower() or "profile" in local_path.lower()) and modality == "document":
                     try:
-                        # 这里需要根据实际返回格式解析
-                        # 暂时返回 None，需要进一步处理
-                        pass
-                    except:
-                        pass
+                        # 尝试读取文件内容（优先使用local_path，如果没有则使用url）
+                        import json
+                        from pathlib import Path
+                        file_path = Path(local_path) if local_path else Path(url)
+                        if file_path.exists():
+                            profile_data = json.loads(file_path.read_text(encoding='utf-8'))
+                            if "profile" in profile_data:
+                                print(f"[INFO] 从 resource 中找到画像: {file_path}")
+                                return profile_data.get("profile")
+                    except Exception as e:
+                        print(f"[DEBUG] 读取 resource 文件失败: {e}")
             
-            # 如果 memU 中没有，尝试从本地缓存加载
-            if self.use_local_cache:
-                cached_profile = self._load_profile_from_cache(user_id)
+            # 如果retrieve没有返回resources，尝试直接查询database中的resources
+            if not resources:
+                print(f"[DEBUG] retrieve未返回resources，尝试直接查询database...")
+                try:
+                    store = service._get_database()
+                    where_filters = {"user_id": user_id}
+                    all_resources = store.resource_repo.list_resources(where_filters)
+                    print(f"[DEBUG] 直接查询到 {len(all_resources)} 个resources")
+                    for res_id, resource in all_resources.items():
+                        url = resource.url
+                        modality = resource.modality
+                        local_path = resource.local_path
+                        if ("profile" in url.lower() or (local_path and "profile" in local_path.lower())) and modality == "document":
+                            try:
+                                import json
+                                from pathlib import Path
+                                file_path = Path(local_path) if local_path else Path(url)
+                                if file_path.exists():
+                                    profile_data = json.loads(file_path.read_text(encoding='utf-8'))
+                                    if "profile" in profile_data:
+                                        print(f"[INFO] 从直接查询的resource中找到画像: {file_path}")
+                                        return profile_data.get("profile")
+                            except Exception as e:
+                                print(f"[DEBUG] 读取直接查询的resource文件失败: {e}")
+                except Exception as e:
+                    print(f"[DEBUG] 直接查询resources失败: {e}")
+            
+            # 尝试从 items 中提取画像（items是memU从document中提取的记忆项）
+            for item in items:
+                summary = item.get("summary", "")
+                if "profile" in summary.lower() or "画像" in summary:
+                    # items通常不包含完整的JSON，所以这里只是标记找到了相关记忆
+                    profile_found = True
+                    print(f"[DEBUG] 在items中找到相关记忆，但无法直接提取完整画像: {summary[:100]}")
+            
+            # 如果 memU 中没有找到画像，打印提示并尝试从本地缓存加载
+            if not profile_found:
+                print(f"[WARN] memU 中未找到用户 {user_id} 的画像信息")
+                cached_profile = try_load_from_cache()
+                cache_tried = True
                 if cached_profile:
-                    return cached_profile.get("profile")
+                    return cached_profile
             
             return None
             
         except Exception as e:
             print(f"[ERROR] 从 memU 加载画像失败: {e}")
-            # 降级到本地缓存
-            if self.use_local_cache:
-                try:
-                    cached_profile = self._load_profile_from_cache(user_id)
-                    if cached_profile:
-                        return cached_profile.get("profile")
-                except Exception as e2:
-                    print(f"[ERROR] 从本地缓存加载也失败: {e2}")
+            # 降级到本地缓存（仅在未尝试过缓存时）
+            if not cache_tried:
+                cached_profile = try_load_from_cache()
+                if cached_profile:
+                    return cached_profile
+            else:
+                print(f"[INFO] 已尝试过本地缓存，跳过重复尝试")
             return None
     
     # ========== 对话历史相关方法 ==========
@@ -354,16 +502,69 @@ class MemUStore:
                 {"role": "user", "content": {"text": f"用户 {user_id} 的对话历史"}}
             ]
             
+            # 调试：打印当前检索配置
+            current_method = service.retrieve_config.method
+            print(f"[DEBUG] 当前检索方式配置: method={current_method}")
+            
             result = await service.retrieve(
                 queries=queries,
                 where={"user_id": user_id}
             )
             
-            # 从检索结果中提取对话
-            # 这里需要根据实际返回格式解析
-            # 暂时返回空列表，需要进一步处理
+            # 在返回结果中添加 method 信息以便调试
+            result["_debug_retrieve_method"] = current_method
             
-            # 如果 memU 中没有，尝试从本地缓存加载
+            # 从检索结果中提取对话
+            resources = result.get("resources", [])
+            items = result.get("items", [])
+            
+            conversation_messages = []
+            
+            # 优先从 resources 中查找对话（对话是以 conversation modality 存储的）
+            for resource in resources:
+                modality = resource.get("modality", "")
+                local_path = resource.get("local_path", "")
+                url = resource.get("url", "")
+                
+                # 检查是否是对话资源
+                if modality == "conversation":
+                    try:
+                        import json
+                        from pathlib import Path
+                        # 优先使用 local_path，如果没有则使用 url
+                        file_path = Path(local_path) if local_path else Path(url)
+                        if file_path.exists():
+                            # 读取对话文件（可能是 JSON 格式）
+                            content = file_path.read_text(encoding='utf-8')
+                            # 尝试解析为 JSON
+                            try:
+                                parsed = json.loads(content)
+                                # 如果是列表，直接使用
+                                if isinstance(parsed, list):
+                                    conversation_messages.extend(parsed)
+                                # 如果是字典，尝试提取 messages 或 content
+                                elif isinstance(parsed, dict):
+                                    if "messages" in parsed:
+                                        conversation_messages.extend(parsed["messages"])
+                                    elif "content" in parsed and isinstance(parsed["content"], list):
+                                        conversation_messages.extend(parsed["content"])
+                            except json.JSONDecodeError:
+                                # 如果不是 JSON，可能是文本格式，尝试解析
+                                # 这里可以根据实际格式进行解析
+                                pass
+                    except Exception as e:
+                        print(f"[DEBUG] 读取对话 resource 文件失败: {e}")
+            
+            # 如果从 resources 中找到了对话，返回
+            if conversation_messages:
+                # 按时间戳排序（如果有）
+                try:
+                    conversation_messages.sort(key=lambda x: x.get("timestamp", "") or x.get("created_at", ""))
+                except:
+                    pass
+                return conversation_messages[:limit]
+            
+            # 如果 memU 中没有找到对话，尝试从本地缓存加载
             if self.use_local_cache:
                 cached_conversation = self._load_conversation_from_cache(user_id)
                 if cached_conversation:
@@ -405,10 +606,17 @@ class MemUStore:
                 {"role": "user", "content": {"text": query}}
             ]
             
+            # 调试：打印当前检索配置
+            current_method = service.retrieve_config.method
+            print(f"[DEBUG] 当前检索方式配置: method={current_method}")
+            
             result = await service.retrieve(
                 queries=queries,
                 where={"user_id": user_id}
             )
+            
+            # 在返回结果中添加 method 信息以便调试
+            result["_debug_retrieve_method"] = current_method
             
             return result
             

@@ -460,7 +460,7 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
         
         return
     
-    # 真实用户模式（原有逻辑）
+    # 真实用户模式
     print("\n说明：")
     print("  - 输入对话内容，系统会提取并更新用户画像")
     if enable_personalized_response and responder:
