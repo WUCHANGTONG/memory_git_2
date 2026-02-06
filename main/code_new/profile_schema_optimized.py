@@ -39,23 +39,18 @@ class HealthSafety(BaseModel):
     """健康与风险控制 - 影响建议强度、安全提示、保守程度"""
     chronic_conditions: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 慢性疾病
     mobility_level: FieldValue = Field(default_factory=FieldValue)  # 行动能力
-    daily_energy_level: FieldValue = Field(default_factory=FieldValue)  # 日常精力水平
-    risk_sensitivity_level: FieldValue = Field(default_factory=FieldValue)  # 风险敏感度
 
 
 class CognitiveInteraction(BaseModel):
     """认知与交互能力 - 影响句长、步骤拆分、重复确认"""
     attention_span: FieldValue = Field(default_factory=FieldValue)  # 注意力持续时间
-    processing_speed: FieldValue = Field(default_factory=FieldValue)  # 信息处理速度
     digital_literacy: FieldValue = Field(default_factory=FieldValue)  # 数字技能水平
-    instruction_following_ability: FieldValue = Field(default_factory=FieldValue)  # 指令理解能力
 
 
 class EmotionalSupport(BaseModel):
     """情感与陪伴需求 - 影响语气选择、陪伴模式"""
     baseline_mood: FieldValue = Field(default_factory=FieldValue)  # 基础情绪状态
     loneliness_level: FieldValue = Field(default_factory=FieldValue)  # 孤独感程度
-    emotional_support_need: FieldValue = Field(default_factory=FieldValue)  # 情感支持需求强度
     preferred_conversation_mode: FieldValue = Field(default_factory=FieldValue)  # 偏好对话模式
 
 
@@ -71,8 +66,6 @@ class ValuesPreferences(BaseModel):
     """价值观与话题偏好 - 影响话题选择、价值对齐、避免踩雷"""
     topic_preferences: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 话题偏好
     taboo_topics: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 敏感话题
-    value_orientation: FieldValue = Field(default_factory=FieldValue)  # 价值观导向
-    motivational_factors: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 激励因素
 
 
 class ResponseStyleController(BaseModel):
@@ -135,22 +128,19 @@ class OptimizedUserProfile(BaseModel):
             "explanation_depth": self.identity_language.explanation_depth_preference.value or "适中",
             "directive_strength": self.response_style.directive_strength.value or "建议性",
             
-            # 安全控制
+# 安全控制
             "risk_cautiousness": self.response_style.risk_cautiousness.value or "谨慎",
             "health_awareness": bool(self.health_safety.chronic_conditions.value),
-            
+
             # 认知适配
             "attention_span": self.cognitive_interaction.attention_span.value or "正常",
-            "processing_speed": self.cognitive_interaction.processing_speed.value or "正常",
-            
+
             # 情感支持
-            "emotional_support_need": self.emotional_support.emotional_support_need.value or "中",
             "loneliness_level": self.emotional_support.loneliness_level.value or "低",
-            
+
             # 个性化内容
             "core_interests": self.lifestyle_social.core_interests.value or [],
-            "taboo_topics": self.values_preferences.taboo_topics.value or [],
-            "motivational_factors": self.values_preferences.motivational_factors.value or []
+            "taboo_topics": self.values_preferences.taboo_topics.value or []
         }
 
     def get_prompt_injection_string(self) -> str:
@@ -181,12 +171,6 @@ class OptimizedUserProfile(BaseModel):
             control_instructions.append("分段呈现信息，避免长段落")
         elif params["attention_span"] == "长":
             control_instructions.append("可以提供较长的段落和详细说明")
-        
-        # 情感支持
-        if params["emotional_support_need"] == "高":
-            control_instructions.append("优先提供情感关怀和支持")
-        elif params["emotional_support_need"] == "中":
-            control_instructions.append("适度提供情感关怀")
         
         # 安全控制
         if params["risk_cautiousness"] == "非常谨慎":
@@ -242,11 +226,6 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
             opt_health["chronic_conditions"] = v1_health["chronic_conditions"]
         if "mobility" in v1_health and v1_health["mobility"].get("value") is not None:
             opt_health["mobility_level"] = v1_health["mobility"]
-        # 尝试从其他字段推导
-        if "sleep_quality" in v1_health and v1_health["sleep_quality"].get("value") is not None:
-            sleep_quality = v1_health["sleep_quality"]["value"]
-            if sleep_quality in ["差", "不好", "失眠"]:
-                opt_health["daily_energy_level"] = {"value": "低", "confidence": v1_health["sleep_quality"].get("confidence", 0.6)}
     
     if "cognitive" in v1_profile:
         v1_cog = v1_profile["cognitive"]
@@ -259,10 +238,6 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
             memory = v1_cog["memory_status"]["value"]
             if memory in ["健忘", "记性不好", "记忆差"]:
                 opt_cog["attention_span"] = {"value": "短", "confidence": v1_cog["memory_status"].get("confidence", 0.6)}
-        if "expression_fluency" in v1_cog and v1_cog["expression_fluency"].get("value") is not None:
-            fluency = v1_cog["expression_fluency"]["value"]
-            if fluency in ["不流畅", "困难"]:
-                opt_cog["processing_speed"] = {"value": "慢", "confidence": v1_cog["expression_fluency"].get("confidence", 0.6)}
     
     if "emotional" in v1_profile:
         v1_emo = v1_profile["emotional"]
@@ -272,15 +247,6 @@ def migrate_from_v1_to_optimized(v1_profile: Dict[str, Any]) -> Dict[str, Any]:
             opt_emo["baseline_mood"] = v1_emo["baseline_mood"]
         if "loneliness_level" in v1_emo and v1_emo["loneliness_level"].get("value") is not None:
             opt_emo["loneliness_level"] = v1_emo["loneliness_level"]
-            # 从孤独感推导情感支持需求
-            loneliness = v1_emo["loneliness_level"]["value"]
-            if loneliness in ["高", "很高", "严重"]:
-                opt_emo["emotional_support_need"] = {"value": "高", "confidence": v1_emo["loneliness_level"].get("confidence", 0.7)}
-        if "anxiety_level" in v1_emo and v1_emo["anxiety_level"].get("value") is not None:
-            anxiety = v1_emo["anxiety_level"]["value"]
-            if anxiety in ["高", "很高", "严重"]:
-                opt_health = optimized["health_safety"]
-                opt_health["risk_sensitivity_level"] = {"value": "高", "confidence": v1_emo["anxiety_level"].get("confidence", 0.6)}
     
     if "lifestyle" in v1_profile:
         v1_life = v1_profile["lifestyle"]
@@ -351,14 +317,63 @@ class GenerationController:
     @staticmethod
     def build_system_prompt(profile: OptimizedUserProfile) -> str:
         """根据画像构建系统提示词"""
-        control_params = profile.get_generation_control_params()
-        
         base_prompt = "你是一个专为老年用户设计的AI助手。"
         
-        # 添加控制指令
+        # 注入用户画像信息（让LLM知道用户的具体情况）
+        profile_info = []
+        
+        # 身份与语言信息
+        identity = profile.identity_language
+        if identity.age.value:
+            profile_info.append(f"- 用户年龄：{identity.age.value}")
+        if identity.gender.value:
+            profile_info.append(f"- 用户性别：{identity.gender.value}")
+        if identity.education_level.value:
+            profile_info.append(f"- 教育程度：{identity.education_level.value}")
+        
+        # 健康状况
+        health = profile.health_safety
+        if health.chronic_conditions.value:
+            profile_info.append(f"- 慢性疾病：{', '.join(health.chronic_conditions.value)}")
+        if health.mobility_level.value:
+            profile_info.append(f"- 行动能力：{health.mobility_level.value}")
+        
+        # 认知与交互
+        cognitive = profile.cognitive_interaction
+        if cognitive.attention_span.value:
+            profile_info.append(f"- 注意力持续时间：{cognitive.attention_span.value}")
+        if cognitive.digital_literacy.value:
+            profile_info.append(f"- 数字技能水平：{cognitive.digital_literacy.value}")
+        
+        # 情感与陪伴
+        emotional = profile.emotional_support
+        if emotional.baseline_mood.value:
+            profile_info.append(f"- 基础情绪状态：{emotional.baseline_mood.value}")
+        if emotional.loneliness_level.value:
+            profile_info.append(f"- 孤独感程度：{emotional.loneliness_level.value}")
+        
+        # 生活与社交
+        lifestyle = profile.lifestyle_social
+        if lifestyle.living_situation.value:
+            profile_info.append(f"- 居住状况：{lifestyle.living_situation.value}")
+        if lifestyle.core_interests.value:
+            profile_info.append(f"- 核心兴趣：{', '.join(lifestyle.core_interests.value[:5])}")
+        
+        # 价值观与话题
+        values = profile.values_preferences
+        if values.taboo_topics.value:
+            profile_info.append(f"- 敏感话题（避免提及）：{', '.join(values.taboo_topics.value)}")
+        
+        # 构建画像信息段落
+        if profile_info:
+            profile_section = "## 用户画像信息\n" + "\n".join(profile_info) + "\n"
+        else:
+            profile_section = ""
+        
+        # 添加生成控制指令
         control_prompt = profile.get_prompt_injection_string()
         
-        return f"{base_prompt}\n\n{control_prompt}"
+        return f"{base_prompt}\n\n{profile_section}\n{control_prompt}"
     
     @staticmethod
     def adapt_response_style(response: str, profile: OptimizedUserProfile) -> str:
@@ -402,7 +417,6 @@ def example_usage():
     profile.response_style.formality_level.value = "温暖"
     profile.response_style.verbosity_level.value = "适中"
     profile.cognitive_interaction.attention_span.value = "短"
-    profile.emotional_support.emotional_support_need.value = "高"
     
     # 3. 获取生成控制参数
     control_params = profile.get_generation_control_params()

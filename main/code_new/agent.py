@@ -101,23 +101,18 @@ def show_profile_summary(profile: Dict[str, Any]):
     print("\n【健康与安全】")
     print(f"  {format_field_value(health.get('chronic_conditions', {}), '慢性疾病')}")
     print(f"  {format_field_value(health.get('mobility_level', {}), '行动能力')}")
-    print(f"  {format_field_value(health.get('daily_energy_level', {}), '日常精力水平')}")
-    print(f"  {format_field_value(health.get('risk_sensitivity_level', {}), '风险敏感度')}")
     
     # 认知与交互
     cognitive = profile.get("cognitive_interaction", {})
     print("\n【认知与交互】")
     print(f"  {format_field_value(cognitive.get('attention_span', {}), '注意力持续时间')}")
-    print(f"  {format_field_value(cognitive.get('processing_speed', {}), '信息处理速度')}")
     print(f"  {format_field_value(cognitive.get('digital_literacy', {}), '数字技能水平')}")
-    print(f"  {format_field_value(cognitive.get('instruction_following_ability', {}), '指令理解能力')}")
     
     # 情感与支持
     emotional = profile.get("emotional_support", {})
     print("\n【情感与支持】")
     print(f"  {format_field_value(emotional.get('baseline_mood', {}), '基础情绪状态')}")
     print(f"  {format_field_value(emotional.get('loneliness_level', {}), '孤独感程度')}")
-    print(f"  {format_field_value(emotional.get('emotional_support_need', {}), '情感支持需求强度')}")
     print(f"  {format_field_value(emotional.get('preferred_conversation_mode', {}), '偏好对话模式')}")
     
     # 生活方式与社交
@@ -133,8 +128,6 @@ def show_profile_summary(profile: Dict[str, Any]):
     print("\n【价值观与偏好】")
     print(f"  {format_field_value(values.get('topic_preferences', {}), '话题偏好')}")
     print(f"  {format_field_value(values.get('taboo_topics', {}), '敏感话题')}")
-    print(f"  {format_field_value(values.get('value_orientation', {}), '价值观导向')}")
-    print(f"  {format_field_value(values.get('motivational_factors', {}), '激励因素')}")
     
     # 生成风格控制器
     style = profile.get("response_style", {})
@@ -523,7 +516,7 @@ async def chat_loop(user_id: str, profile: Dict[str, Any],
             await memory_manager.add_message(user_id, "user", user_input)
             print("[OK] 消息已保存")
             
-            # 获取对话上下文（用于画像提取）
+            # 获取对话上下文（用于画像提取，没用到，因为没配置retrieve）
             conversation_context = memory_manager.get_conversation_context(user_id, limit=10)
             
             # 更新画像（只使用用户消息，不包括助手回复）

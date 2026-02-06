@@ -239,17 +239,57 @@ class PersonalizedResponder:
         prompt_parts.append("3. 使用适合老年人的语言风格（简单、亲切、耐心）")
         prompt_parts.append("4. 如果用户画像中有相关信息，要充分利用")
         prompt_parts.append("5. 回答要具体、实用、有帮助")
-        prompt_parts.append("6. 根据生成控制参数调整回答风格")
         
-        # 添加个性化提示（基于控制参数）
+        # 添加个性化控制要求（基于控制参数）
         if control_params:
+            # 语言风格控制
+            formality = control_params.get("formality_level", "")
+            if formality == "温暖":
+                prompt_parts.append("6. 使用温暖亲切的语调，多用情感词汇表达关心")
+            elif formality == "正式":
+                prompt_parts.append("6. 使用正式礼貌的语言，保持尊敬的态度")
+            elif formality == "随意":
+                prompt_parts.append("6. 使用轻松随意的语言，像朋友聊天一样")
+            
+            # 详细程度控制
+            verbosity = control_params.get("verbosity_level", "")
+            if verbosity == "简洁":
+                prompt_parts.append("7. 回答要简洁明了，避免冗长的解释")
+            elif verbosity == "详细":
+                prompt_parts.append("7. 提供详细完整的解释，不需要担心篇幅")
+            elif verbosity == "适中":
+                prompt_parts.append("7. 回答适度详细，保持适中的篇幅")
+            
+            # 认知适配控制
+            attention = control_params.get("attention_span", "")
+            if attention == "短":
+                prompt_parts.append("8. 使用短段落，每段控制在2-3句话以内，避免长篇大论")
+            elif attention == "长":
+                prompt_parts.append("8. 可以使用较长的段落，提供完整的说明")
+            
+            # 安全风险控制
+            risk = control_params.get("risk_cautiousness", "")
+            if risk == "非常谨慎":
+                prompt_parts.append("9. 对于健康和安全建议要格外谨慎，强调潜在风险")
+            elif risk == "谨慎":
+                prompt_parts.append("9. 对健康和安全相关建议保持适度谨慎")
+            
+            # 情感支持控制
+            loneliness = control_params.get("loneliness_level", "")
+            if loneliness in ["高", "很高"]:
+                prompt_parts.append("10. 关注用户的情感状态，多给予陪伴和关怀")
+            
+            # 核心兴趣
             if control_params.get("core_interests"):
                 interests = ", ".join(control_params["core_interests"][:3])
-                prompt_parts.append(f"7. 可以结合用户的兴趣（{interests}）举例说明")
+                prompt_parts.append(f"11. 可以结合用户的兴趣（{interests}）举例说明，增强共鸣")
             
+            # 敏感话题
             if control_params.get("taboo_topics"):
                 taboos = ", ".join(control_params["taboo_topics"])
-                prompt_parts.append(f"8. 避免涉及敏感话题：{taboos}")
+                prompt_parts.append(f"12. 严格避免涉及敏感话题：{taboos}")
+        else:
+            prompt_parts.append("6. 根据生成控制参数调整回答风格")
         
         prompt_parts.append("\n请生成个性化回答：")
         

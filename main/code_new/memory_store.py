@@ -497,9 +497,9 @@ class MemUStore:
         try:
             service = self._get_service()
             
-            # 使用 retrieve 查询对话历史
+            # 使用 retrieve 查询对话历史（使用英文查询以匹配 caption）
             queries = [
-                {"role": "user", "content": {"text": f"用户 {user_id} 的对话历史"}}
+                {"role": "user", "content": {"text": "user conversation history"}}
             ]
             
             # 调试：打印当前检索配置
@@ -566,6 +566,7 @@ class MemUStore:
             
             # 如果 memU 中没有找到对话，尝试从本地缓存加载
             if self.use_local_cache:
+                print(f"从本地加载历史对话")
                 cached_conversation = self._load_conversation_from_cache(user_id)
                 if cached_conversation:
                     return cached_conversation[:limit]

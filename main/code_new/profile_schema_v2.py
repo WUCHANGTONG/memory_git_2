@@ -48,7 +48,6 @@ class Cognitive(BaseModel):
     """认知能力 - 影响信息呈现方式、解释复杂度、重复频率"""
     memory_capacity: FieldValue = Field(default_factory=FieldValue)  # 记忆能力
     attention_span: FieldValue = Field(default_factory=FieldValue)  # 注意力持续时间
-    processing_speed: FieldValue = Field(default_factory=FieldValue)  # 信息处理速度
     digital_literacy: FieldValue = Field(default_factory=FieldValue)  # 数字技能
     learning_preference: FieldValue = Field(default_factory=FieldValue)  # 学习偏好
     confusion_triggers: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 混淆触发因素
@@ -87,7 +86,6 @@ class InterestsValues(BaseModel):
     life_priorities: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 生活重点
     cultural_values: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 文化价值观
     taboo_topics: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 敏感话题
-    motivational_factors: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 激励因素
     nostalgic_elements: FieldValue = Field(default_factory=lambda: FieldValue(value=[]))  # 怀旧元素
 
 
@@ -144,7 +142,6 @@ class UserProfileV2(BaseModel):
             "taboo_topics": self.interests_values.taboo_topics.value,
             "cognitive_level": {
                 "attention_span": self.cognitive.attention_span.value,
-                "processing_speed": self.cognitive.processing_speed.value,
                 "comprehension_level": self.cognitive.comprehension_level.value
             },
             "social_needs": {
